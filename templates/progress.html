@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Progress — Gym Log{% endblock %}
+{% block content %}
+
+<h1>Progress <span class="muted">— {{ user_name }}</span></h1>
+
+<form method="get" class="filter-row">
+  <select name="exercise_id" onchange="this.form.submit()">
+    <option value="">Pick an exercise…</option>
+    {% for ex in exercises %}
+      <option value="{{ ex.id }}" {% if selected_exercise and selected_exercise.id == ex.id %}selected{% endif %}>{{ ex.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if selected_exercise %}
+  {% if series %}
+    <div class="chart-wrap">
+      <canvas id="progress-chart"></canvas>
+    </div>
+  {% else %}
+    <p class="muted">No logged sets for this exercise yet.</p>
+  {% endif %}
+{% else %}
+  <p class="muted">Pick an exercise above to see your progress.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  window.PROGRESS_SERIES = {{ series | tojson }};
+  window.PROGRESS_EXERCISE_NAME = {{ (selected_exercise.name if selected_exercise else "") | tojson }};
+</script>
+<script src="{{ url_for('static', filename='chart.js') }}" defer></script>
+{% endblock %}

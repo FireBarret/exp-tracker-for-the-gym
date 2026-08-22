@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>{% block title %}Gym Log{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('home') }}">🏋️ Gym Log</a>
+    {% if session.get('user_id') %}
+      <nav class="topnav">
+        <span class="who">{{ session.get('user_name') }}</span>
+        <a href="{{ url_for('splits') }}">Splits</a>
+        <a href="{{ url_for('history') }}">History</a>
+        <a href="{{ url_for('progress') }}">Progress</a>
+        <a href="{{ url_for('home') }}">Switch user</a>
+      </nav>
+    {% endif %}
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

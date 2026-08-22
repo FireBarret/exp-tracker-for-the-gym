@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}History — Gym Log{% endblock %}
+{% block content %}
+
+<h1>History <span class="muted">— {{ user_name }}</span></h1>
+
+<form method="get" class="filter-row">
+  <select name="split_id" onchange="this.form.submit()">
+    <option value="">All splits</option>
+    {% for s in all_splits %}
+      <option value="{{ s.id }}" {% if selected_split_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="exercise_id" onchange="this.form.submit()">
+    <option value="">All exercises</option>
+    {% for ex in all_exercises %}
+      <option value="{{ ex.id }}" {% if selected_exercise_id == ex.id %}selected{% endif %}>{{ ex.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if not sessions_with_sets %}
+  <p class="muted">No sessions yet. Go log something!</p>
+{% endif %}
+
+{% for entry in sessions_with_sets %}
+  {% set sess = entry.session %}
+  <div class="card session-card">
+    <h3>{{ sess.date }} — {{ sess.split_name }}</h3>
+    {% if sess.notes %}<p class="notes">{{ sess.notes }}</p>{% endif %}
+    {% if entry.sets %}
+      <table class="set-table">
+        <thead><tr><th>Exercise</th><th>Set</th><th>Weight</th><th>Reps</th></tr></thead>
+        <tbody>
+          {% for st in entry.sets %}
+            <tr>
+              <td>{{ st.exercise_name }}</td>
+              <td>{{ st.set_number }}</td>
+              <td>{{ st.weight_kg if st.weight_kg is not none else '—' }}{% if st.weight_kg is not none %}kg{% endif %}</td>
+              <td>{{ st.reps }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No sets logged.</p>
+    {% endif %}
+  </div>
+{% endfor %}
+
+{% endblock %}

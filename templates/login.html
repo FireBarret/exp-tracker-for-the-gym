@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Log in — Gym Log{% endblock %}
+{% block content %}
+<div class="card centered">
+  <h1>Gym Log</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" class="stack">
+    <input type="password" name="password" placeholder="Password" autofocus required>
+    <button type="submit" class="btn primary">Enter</button>
+  </form>
+</div>
+{% endblock %}

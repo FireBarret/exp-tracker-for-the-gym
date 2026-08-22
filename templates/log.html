@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ split.name }} — Gym Log{% endblock %}
+{% block content %}
+
+<h1>{{ split.name }} <span class="muted">— {{ session_row.date }}</span></h1>
+
+{% for muscle_group, exercises in grouped.items() %}
+  <h2 class="muscle-heading">{{ muscle_group }}</h2>
+  {% for ex in exercises %}
+    <div class="exercise-card" data-exercise-id="{{ ex.id }}" data-step-kg="{{ ex.step_kg }}">
+      <div class="exercise-head">
+        <h3>{{ ex.name }}</h3>
+        <span class="target">{{ ex.target_sets }}x{{ ex.target_rep_range }}</span>
+        <span class="set-count" data-role="set-count">{{ ex.set_count }}{% if ex.target_sets %}/{{ ex.target_sets }}{% endif %} sets</span>
+      </div>
+
+      <div class="log-row">
+        <input type="number" class="reps-input" data-role="reps" placeholder="reps"
+               value="{{ ex.last_reps if ex.last_reps is not none else '' }}" inputmode="numeric" min="0">
+
+        {% if ex.repeat_weight is not none %}
+          <button type="button" class="btn weight-btn" data-role="repeat" data-weight="{{ ex.repeat_weight }}">
+            Repeat<br><b>{{ ex.repeat_weight }}kg</b>
+          </button>
+          <button type="button" class="btn weight-btn" data-role="step" data-weight="{{ ex.step_weight }}">
+            +{{ ex.step_kg }}<br><b>{{ ex.step_weight }}kg</b>
+          </button>
+        {% else %}
+          <button type="button" class="btn weight-btn wide" data-role="bodyweight">
+            Log (bodyweight / first time)
+          </button>
+        {% endif %}
+      </div>
+
+      <div class="log-row secondary">
+        <input type="number" step="0.25" class="custom-weight" data-role="custom-weight" placeholder="custom kg">
+        <button type="button" class="btn small" data-role="custom-log">Log custom</button>
+      </div>
+
+      <ul class="set-log" data-role="set-log"></ul>
+    </div>
+  {% endfor %}
+{% endfor %}
+
+<div class="card notes-card">
+  <h3>Notes <span class="muted">(abs / cardio / anything else)</span></h3>
+  <textarea id="session-notes" rows="3" placeholder="e.g. 3x15 hanging leg raise, 10 min bike">{{ session_row.notes or '' }}</textarea>
+  <button type="button" id="save-notes" class="btn small">Save notes</button>
+  <span id="notes-saved" class="muted" hidden>Saved.</span>
+</div>
+
+{% endblock %}
+
+{% block head %}
+<script>
+  window.SESSION_ID = {{ session_row.id }};
+  window.LOG_URL = "{{ url_for('log_set', session_id=session_row.id) }}";
+  window.NOTES_URL = "{{ url_for('session_notes', session_id=session_row.id) }}";
+</script>
+<script src="{{ url_for('static', filename='log.js') }}" defer></script>
+{% endblock %}
