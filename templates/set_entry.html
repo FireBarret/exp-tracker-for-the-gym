@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ exercise.name }} — Gym Log{% endblock %}
+{% block content %}
+
+<div class="entry-head">
+  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back">‹</a>
+  <h1 class="entry-title">{{ exercise.name }}</h1>
+  <span class="entry-target">{{ exercise.target_sets }}×{{ exercise.target_rep_range }}</span>
+</div>
+
+<div class="stat-chips">
+  {% if previous %}
+    <button type="button" class="stat-chip" data-role="recall"
+            data-weight="{{ previous.weight_kg if previous.weight_kg is not none else '' }}"
+            data-reps="{{ previous.reps }}">
+      <span class="stat-label">Previous</span>
+      <span class="stat-value">{% if previous.weight_kg is not none %}{{ previous.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ previous.reps }}</span>
+    </button>
+  {% else %}
+    <span class="stat-chip empty"><span class="stat-label">Previous</span><span class="stat-value">—</span></span>
+  {% endif %}
+
+  {% if pb %}
+    <button type="button" class="stat-chip pb" data-role="recall"
+            data-weight="{{ pb.weight_kg if pb.weight_kg is not none else '' }}"
+            data-reps="{{ pb.reps }}">
+      <span class="stat-label">PB</span>
+      <span class="stat-value">{% if pb.weight_kg is not none %}{{ pb.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ pb.reps }}</span>
+    </button>
+  {% else %}
+    <span class="stat-chip empty"><span class="stat-label">PB</span><span class="stat-value">—</span></span>
+  {% endif %}
+</div>
+
+<div class="hero" data-uses-weight="{{ 1 if exercise.uses_weight else 0 }}">
+  {% if exercise.uses_weight %}
+    <button type="button" class="hero-field active" data-field="weight">
+      <span class="hero-label">Weight</span>
+      <span class="hero-number"><span data-role="weight-display">0</span><span class="hero-unit">kg</span></span>
+    </button>
+  {% endif %}
+  <button type="button" class="hero-field{% if not exercise.uses_weight %} active{% endif %}" data-field="reps">
+    <span class="hero-label">Reps</span>
+    <span class="hero-number"><span data-role="reps-display">0</span><span class="hero-unit">reps</span></span>
+  </button>
+</div>
+
+<div class="steppers" data-role="steppers"></div>
+
+<div class="entry-bar">
+  <span class="entry-summary" data-role="summary"></span>
+  <button type="button" class="btn primary add-set" data-role="add-set">Add set</button>
+</div>
+
+<h2 class="muscle-heading">This session</h2>
+<ul class="set-list" data-role="set-list">
+  {% for st in logged %}
+    <li data-set-id="{{ st.id }}">
+      <span class="set-n">#{{ st.set_number }}</span>
+      <span class="set-val">{% if st.weight_kg is not none %}{{ st.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ st.reps }}{% if st.weight_kg is none %} reps{% endif %}</span>
+      <button type="button" class="set-del" data-role="delete-set" data-set-id="{{ st.id }}" aria-label="Delete set">×</button>
+    </li>
+  {% endfor %}
+</ul>
+<p class="muted empty-note" data-role="empty-note"{% if logged %} hidden{% endif %}>No sets logged yet.</p>
+
+{% endblock %}
+
+{% block head %}
+<script>
+  window.ENTRY = {
+    exerciseId: {{ exercise.id }},
+    usesWeight: {{ 'true' if exercise.uses_weight else 'false' }},
+    stepKg: {{ exercise.step_kg }},
+    startWeight: {{ start_weight }},
+    startReps: {{ start_reps }},
+    logUrl: "{{ url_for('log_set', session_id=session_row.id) }}",
+    deleteUrlBase: "{{ url_for('session_log', session_id=session_row.id) }}/set/"
+  };
+</script>
+<script src="{{ url_for('static', filename='set_entry.js') }}" defer></script>
+{% endblock %}

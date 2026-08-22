@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Pick a split — Gym Log{% endblock %}
+{% block content %}
+
+<h1>Hey {{ user_name }} — what are you training?</h1>
+
+<div class="grid">
+  {% for split in splits %}
+    <form method="post" action="{{ url_for('start_session') }}">
+      <input type="hidden" name="split_id" value="{{ split.id }}">
+      <button type="submit" class="btn tile">{{ split.name }}</button>
+    </form>
+  {% endfor %}
+</div>
+
+<details class="disclosure">
+  <summary>+ New split</summary>
+  <form method="post" action="{{ url_for('new_split') }}" class="inline-form">
+    <input type="text" name="name" placeholder="e.g. Arms, Full body" required>
+    <button type="submit" class="btn small primary">Create</button>
+  </form>
+</details>
+
+{% endblock %}

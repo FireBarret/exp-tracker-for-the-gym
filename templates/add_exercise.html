@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Add exercise — Gym Log{% endblock %}
+{% block content %}
+
+<div class="entry-head">
+  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back">‹</a>
+  <h1 class="entry-title">Add exercise</h1>
+</div>
+
+<h2 class="muscle-heading">Recommended for {{ split.name }}</h2>
+{% if recommended %}
+  <ul class="plan-list">
+    {% for ex in recommended %}
+      <li class="plan-row">
+        <form method="post" action="{{ url_for('add_exercise', session_id=session_row.id) }}" class="plan-add-form">
+          <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+          <button type="submit" class="plan-main as-button">
+            <span class="plan-name">{{ ex.name }}</span>
+            <span class="plan-target">{{ ex.muscle_group }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}</span>
+          </button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="muted">Everything from {{ split.name }} is already on the plan.</p>
+{% endif %}
+
+<details class="disclosure">
+  <summary>··· Other exercises ({{ others | length }})</summary>
+  <ul class="plan-list">
+    {% for ex in others %}
+      <li class="plan-row">
+        <form method="post" action="{{ url_for('add_exercise', session_id=session_row.id) }}" class="plan-add-form">
+          <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+          <button type="submit" class="plan-main as-button">
+            <span class="plan-name">{{ ex.name }}</span>
+            <span class="plan-target">{{ ex.split_name }} · {{ ex.muscle_group }}</span>
+          </button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+</details>
+
+<details class="disclosure">
+  <summary>+ Brand new exercise</summary>
+  <form method="post" action="{{ url_for('new_exercise', session_id=session_row.id) }}" class="stack new-ex-form">
+    <input type="text" name="name" placeholder="Exercise name" required>
+    <input type="text" name="muscle_group" placeholder="Muscle group (e.g. Chest)">
+    <label class="field-row">
+      <span>Split</span>
+      <select name="split_id">
+        {% for s in splits %}
+          <option value="{{ s.id }}" {% if s.id == split.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field-row"><span>Target sets</span><input type="number" name="target_sets" value="3" min="1"></label>
+    <label class="field-row"><span>Rep range</span><input type="text" name="target_rep_range" value="8-12"></label>
+    <label class="field-row"><span>Step (kg)</span><input type="number" name="step_kg" value="2.5" step="0.25"></label>
+    <label class="check-row"><input type="checkbox" name="uses_weight" checked> Uses weight</label>
+    <button type="submit" class="btn primary">Create &amp; add</button>
+  </form>
+</details>
+
+{% endblock %}

@@ -1,26 +1,12 @@
 {% extends "base.html" %}
-{% block title %}
-  {% if splits is defined %}Pick a split{% else %}Pick a user{% endif %} — Gym Log
-{% endblock %}
+{% block title %}Pick a user — Gym Log{% endblock %}
 {% block content %}
 
-{% if splits is defined %}
-  <h1>Hey {{ user_name }} — pick a split</h1>
-  <div class="grid">
-    {% for split in splits %}
-      <form method="post" action="{{ url_for('start_session') }}">
-        <input type="hidden" name="split_id" value="{{ split.id }}">
-        <button type="submit" class="btn tile">{{ split.name }}</button>
-      </form>
-    {% endfor %}
-  </div>
-{% else %}
-  <h1>Who's lifting?</h1>
-  <div class="grid">
-    {% for user in users %}
-      <a class="btn tile" href="{{ url_for('select_user', user_id=user.id) }}">{{ user.name }}</a>
-    {% endfor %}
-  </div>
-{% endif %}
+<h1>Who's lifting?</h1>
+<div class="grid">
+  {% for user in users %}
+    <a class="btn tile" href="{{ url_for('select_user', user_id=user.id) }}">{{ user.name }}</a>
+  {% endfor %}
+</div>
 
 {% endblock %}

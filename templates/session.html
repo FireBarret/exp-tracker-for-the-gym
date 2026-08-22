@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ split.name }} — Gym Log{% endblock %}
+{% block content %}
+
+<h1>{{ split.name }} <span class="muted">— {{ session_row.date }}</span></h1>
+
+{% if exercise_count == 0 %}
+  <p class="muted">Nothing on the plan yet. Tap <b>+ Add exercise</b> to build this session.</p>
+{% endif %}
+
+{% for muscle_group, exercises in grouped.items() %}
+  <h2 class="muscle-heading">{{ muscle_group }}</h2>
+  <ul class="plan-list">
+    {% for ex in exercises %}
+      <li class="plan-row{% if ex.target_sets and ex.set_count >= ex.target_sets %} done{% endif %}">
+        <a class="plan-main" href="{{ url_for('set_entry', session_id=session_row.id, exercise_id=ex.id) }}">
+          <span class="plan-name">{{ ex.name }}</span>
+          <span class="plan-target">{{ ex.target_sets }}×{{ ex.target_rep_range }}{% if not ex.uses_weight %} · bodyweight{% endif %}</span>
+        </a>
+        <span class="plan-count">{{ ex.set_count }}{% if ex.target_sets %}/{{ ex.target_sets }}{% endif %}</span>
+        <form method="post"
+              action="{{ url_for('remove_exercise', session_id=session_row.id, exercise_id=ex.id) }}"
+              onsubmit="return confirm('Remove {{ ex.name }}{% if ex.set_count %} and its {{ ex.set_count }} logged set(s){% endif %} from this session?');">
+          <button type="submit" class="plan-remove" aria-label="Remove {{ ex.name }}">×</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% endfor %}
+
+<a class="btn add-btn" href="{{ url_for('add_exercise', session_id=session_row.id) }}">+ Add exercise</a>
+
+<div class="card notes-card">
+  <h3>Notes <span class="muted">(abs / cardio / anything else)</span></h3>
+  <textarea id="session-notes" rows="3" placeholder="e.g. 3x15 hanging leg raise, 10 min bike">{{ session_row.notes or '' }}</textarea>
+  <button type="button" id="save-notes" class="btn small">Save notes</button>
+  <span id="notes-saved" class="muted" hidden>Saved.</span>
+</div>
+
+{% endblock %}
+
+{% block head %}
+<script>window.NOTES_URL = "{{ url_for('session_notes', session_id=session_row.id) }}";</script>
+<script src="{{ url_for('static', filename='session.js') }}" defer></script>
+{% endblock %}
