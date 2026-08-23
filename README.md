@@ -23,6 +23,14 @@ vanilla JS + Chart.js (via CDN). No build step.
   progress are all per-user.
 - **Bodyweight exercises** (`uses_weight = 0`, e.g. Pullups) show reps only — no kg.
 - **Abs / cardio** go in the free-text Notes box at the bottom of the session.
+- **Editing history**: every session on the History page has an **Edit** link —
+  change its date and notes, correct any set's weight or reps, delete individual
+  sets (the rest renumber), or delete the whole session. Clearing a weight field
+  turns that set into a bodyweight set.
+- **Exporting**: the **⬇ Export CSV** button on the History page downloads one
+  row per set (date, split, muscle group, exercise, set number, weight, reps,
+  notes). It respects whatever split/exercise filter is active, so you can export
+  everything or just one lift. You only ever export your own history.
 
 ## Local development
 
@@ -112,4 +120,9 @@ Then hit **Reload** on the Web tab. Your `.env` and `gym.db` are untouched by pu
 
 - `gym.db` and `.env` are gitignored — each environment keeps its own.
 - Removing an exercise from a session also deletes the sets you logged for it
-  in that session (it asks first).
+  in that session (it asks first). Same for deleting a session from the edit
+  screen — it asks, then takes its sets with it.
+- The CSV export prefixes any value starting with `=`, `+`, `-` or `@` with an
+  apostrophe, so a creatively named exercise can't run as a spreadsheet formula.
+- Since `gym.db` lives on PythonAnywhere's disk and isn't in git, the CSV export
+  doubles as your backup — worth pulling one down every so often.

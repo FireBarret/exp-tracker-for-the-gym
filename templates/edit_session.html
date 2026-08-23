@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ session_row.date }} — Gym Log{% endblock %}
+{% block content %}
+
+<div class="entry-head">
+  <a class="back" href="{{ url_for('history') }}" aria-label="Back">‹</a>
+  <h1 class="entry-title">Edit session</h1>
+  <span class="entry-target">{{ split.name }}</span>
+</div>
+
+<form method="post" class="edit-form">
+  <label class="field-row"><span>Date</span>
+    <input type="date" name="date" value="{{ session_row.date }}" required>
+  </label>
+
+  <label class="field-row top"><span>Notes</span>
+    <textarea name="notes" rows="2" placeholder="abs / cardio / anything else">{{ session_row.notes or '' }}</textarea>
+  </label>
+
+  <h2 class="muscle-heading">Sets</h2>
+  {% if sets %}
+    <table class="edit-table">
+      <thead>
+        <tr><th>Exercise</th><th>#</th><th>kg</th><th>Reps</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for st in sets %}
+          <tr>
+            <td class="ex-cell">{{ st.exercise_name }}</td>
+            <td class="num-cell">{{ st.set_number }}</td>
+            <td>
+              <input type="number" step="0.25" min="0" class="edit-num"
+                     name="set_{{ st.id }}_weight"
+                     value="{{ st.weight_kg | trim_zeros }}" placeholder="—">
+            </td>
+            <td>
+              <input type="number" min="0" class="edit-num"
+                     name="set_{{ st.id }}_reps" value="{{ st.reps }}" required>
+            </td>
+            <td>
+              <button type="submit" class="set-del"
+                      formmethod="post" formnovalidate
+                      formaction="{{ url_for('delete_set', session_id=session_row.id, set_id=st.id) }}"
+                      onclick="return confirm('Delete this set?');"
+                      aria-label="Delete set">×</button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No sets logged in this session.</p>
+  {% endif %}
+
+  <div class="edit-actions">
+    <button type="submit" class="btn primary">Save changes</button>
+  </div>
+</form>
+
+<form method="post" action="{{ url_for('delete_session', session_id=session_row.id) }}"
+      onsubmit="return confirm('Delete this whole session and all {{ sets | length }} of its sets? This cannot be undone.');">
+  <button type="submit" class="btn danger-btn">Delete entire session</button>
+</form>
+
+{% endblock %}

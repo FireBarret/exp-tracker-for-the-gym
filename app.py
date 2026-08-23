@@ -1,9 +1,11 @@
+import csv
+import io
 import os
 from datetime import date
 from functools import wraps
 
-from flask import (Flask, abort, g, jsonify, redirect, render_template,
-                   request, session, url_for)
+from flask import (Flask, Response, abort, g, jsonify, redirect,
+                   render_template, request, session, url_for)
 
 try:
     from dotenv import load_dotenv
@@ -352,6 +354,89 @@ def history():
         selected_split_id=split_id,
         selected_exercise_id=exercise_id,
         user_name=session.get("user_name"),
+    )
+
+
+# ---- editing past sessions ----
+
+@app.route("/history/session/<int:session_id>/edit", methods=["GET", "POST"])
+@login_required
+@user_required
+def edit_session(session_id):
+    sess = owned_session(session_id)
+
+    if request.method == "POST":
+        models.update_session(
+            g.db,
+            session_id,
+            (request.form.get("date") or sess["date"]).strip(),
+            request.form.get("notes", ""),
+        )
+        # Each set is submitted as set_<id>_weight / set_<id>_reps.
+        for st in models.get_sets_for_session(g.db, session_id):
+            reps = request.form.get(f"set_{st['id']}_reps", type=int)
+            if reps is None or reps < 0:
+                continue
+            raw_weight = (request.form.get(f"set_{st['id']}_weight") or "").strip()
+            weight = float(raw_weight) if raw_weight else None
+            models.update_set(g.db, st["id"], session_id, weight, reps)
+        return redirect(url_for("history"))
+
+    return render_template(
+        "edit_session.html",
+        session_row=sess,
+        split=models.get_split(g.db, sess["split_id"]),
+        sets=models.get_sets_for_session(g.db, session_id),
+        user_name=session.get("user_name"),
+    )
+
+
+@app.route("/history/session/<int:session_id>/delete", methods=["POST"])
+@login_required
+@user_required
+def delete_session(session_id):
+    owned_session(session_id)
+    models.delete_session(g.db, session_id)
+    return redirect(url_for("history"))
+
+
+# ---- export ----
+
+def _csv_safe(value):
+    """Stop a value beginning with = + - @ from being read as a spreadsheet formula."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+@app.route("/export.csv")
+@login_required
+@user_required
+def export_csv():
+    rows = models.get_export_rows(
+        g.db,
+        session["user_id"],
+        request.args.get("split_id", type=int),
+        request.args.get("exercise_id", type=int),
+    )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["date", "user", "split", "muscle_group", "exercise",
+                     "set_number", "weight_kg", "reps", "session_notes"])
+    for r in rows:
+        writer.writerow([
+            _csv_safe(r["date"]), _csv_safe(r["user"]), _csv_safe(r["split"]),
+            _csv_safe(r["muscle_group"]), _csv_safe(r["exercise"]),
+            r["set_number"],
+            "" if r["weight_kg"] is None else f"{r['weight_kg']:g}",
+            r["reps"], _csv_safe(r["notes"]),
+        ])
+
+    filename = f"gym-log-{session.get('user_name', 'export')}-{date.today().isoformat()}.csv"
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

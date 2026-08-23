@@ -351,3 +351,52 @@ def get_progress_series(conn, user_id, exercise_id):
         """,
         (user_id, exercise_id),
     ).fetchall()
+
+def update_session(conn, session_id, date, notes):
+    conn.execute(
+        "UPDATE sessions SET date = ?, notes = ? WHERE id = ?",
+        (date, notes, session_id),
+    )
+    conn.commit()
+
+
+def delete_session(conn, session_id):
+    """Delete a whole session and everything hanging off it."""
+    conn.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
+    conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (session_id,))
+    conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+    conn.commit()
+
+
+def update_set(conn, set_id, session_id, weight_kg, reps):
+    """Correct a logged set. session_id is passed so a set can only be edited
+    through the session that owns it."""
+    conn.execute(
+        "UPDATE sets SET weight_kg = ?, reps = ? WHERE id = ? AND session_id = ?",
+        (weight_kg, reps, set_id, session_id),
+    )
+    conn.commit()
+
+
+def get_export_rows(conn, user_id, split_id=None, exercise_id=None):
+    """Flat one-row-per-set view for CSV export, honouring the history filters."""
+    query = """
+        SELECT sessions.date, splits.name AS split, exercises.muscle_group,
+               exercises.name AS exercise, sets.set_number, sets.weight_kg,
+               sets.reps, sessions.notes, users.name AS user
+        FROM sets
+        JOIN sessions ON sessions.id = sets.session_id
+        JOIN splits ON splits.id = sessions.split_id
+        JOIN exercises ON exercises.id = sets.exercise_id
+        JOIN users ON users.id = sessions.user_id
+        WHERE sessions.user_id = ?
+    """
+    params = [user_id]
+    if split_id:
+        query += " AND sessions.split_id = ?"
+        params.append(split_id)
+    if exercise_id:
+        query += " AND sets.exercise_id = ?"
+        params.append(exercise_id)
+    query += " ORDER BY sessions.date DESC, sessions.id DESC, exercises.name, sets.set_number"
+    return conn.execute(query, params).fetchall()

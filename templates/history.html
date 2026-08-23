@@ -19,14 +19,22 @@
   </select>
 </form>
 
-{% if not sessions_with_sets %}
+{% if sessions_with_sets %}
+  <a class="btn small export-btn"
+     href="{{ url_for('export_csv', split_id=selected_split_id or None, exercise_id=selected_exercise_id or None) }}">
+    ⬇ Export CSV{% if selected_split_id or selected_exercise_id %} (filtered){% endif %}
+  </a>
+{% else %}
   <p class="muted">No sessions yet. Go log something!</p>
 {% endif %}
 
 {% for entry in sessions_with_sets %}
   {% set sess = entry.session %}
   <div class="card session-card">
-    <h3>{{ sess.date }} — {{ sess.split_name }}</h3>
+    <div class="session-head">
+      <h3>{{ sess.date }} — {{ sess.split_name }}</h3>
+      <a class="edit-link" href="{{ url_for('edit_session', session_id=sess.id) }}">Edit</a>
+    </div>
     {% if sess.notes %}<p class="notes">{{ sess.notes }}</p>{% endif %}
     {% if entry.sets %}
       <table class="set-table">
@@ -36,7 +44,7 @@
             <tr>
               <td>{{ st.exercise_name }}</td>
               <td>{{ st.set_number }}</td>
-              <td>{{ st.weight_kg if st.weight_kg is not none else '—' }}{% if st.weight_kg is not none %}kg{% endif %}</td>
+              <td>{% if st.weight_kg is not none %}{{ st.weight_kg | trim_zeros }}kg{% else %}—{% endif %}</td>
               <td>{{ st.reps }}</td>
             </tr>
           {% endfor %}
