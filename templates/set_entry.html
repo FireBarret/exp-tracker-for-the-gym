@@ -78,5 +78,5 @@
     deleteUrlBase: "{{ url_for('session_log', session_id=session_row.id) }}/set/"
   };
 </script>
-<script src="{{ url_for('static', filename='set_entry.js') }}" defer></script>
+<script src="{{ static_url('set_entry.js') }}" defer></script>
 {% endblock %}

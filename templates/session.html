@@ -2,56 +2,112 @@
 {% block title %}{{ split.name }} — Gym Log{% endblock %}
 {% block content %}
 
-<h1>{{ split.name }} <span class="muted">— {{ session_row.date }}</span></h1>
+<div id="plan-view">
+  <h1>{{ split.name }} <span class="muted">— {{ session_row.date }}</span></h1>
 
-{% if exercise_count == 0 %}
-  <p class="muted">Nothing on the plan yet. Tap <b>+ Add exercise</b> to build this session.</p>
-{% endif %}
+  {% if exercise_count == 0 %}
+    <p class="muted">Nothing on the plan yet. Tap <b>+ Add exercise</b> to build this session.</p>
+  {% endif %}
 
-{% for muscle_group, exercises in grouped.items() %}
-  <h2 class="muscle-heading">{{ muscle_group }}</h2>
-  <ul class="plan-list">
-    {% for ex in exercises %}
-      <li class="plan-row{% if ex.target_sets and ex.set_count >= ex.target_sets %} done{% endif %}">
-        <a class="plan-main" href="{{ url_for('set_entry', session_id=session_row.id, exercise_id=ex.id) }}">
-          <span class="plan-name">{{ ex.name }}</span>
-          <span class="plan-target">{{ ex.target_sets }}×{{ ex.target_rep_range }}{% if not ex.uses_weight %} · bodyweight{% endif %}</span>
-        </a>
-        <span class="plan-count">{{ ex.set_count }}{% if ex.target_sets %}/{{ ex.target_sets }}{% endif %}</span>
-        <form method="post"
-              action="{{ url_for('remove_exercise', session_id=session_row.id, exercise_id=ex.id) }}"
-              onsubmit="return confirm('Remove {{ ex.name }}{% if ex.set_count %} and its {{ ex.set_count }} logged set(s){% endif %} from this session?');">
-          <button type="submit" class="plan-remove" aria-label="Remove {{ ex.name }}">×</button>
-        </form>
-      </li>
-    {% endfor %}
-  </ul>
-{% endfor %}
+  {% for muscle_group, exercises in grouped.items() %}
+    <h2 class="muscle-heading">{{ muscle_group }}</h2>
+    <ul class="plan-list">
+      {% for ex in exercises %}
+        {% set done = ex.target_sets and ex.sets | length >= ex.target_sets %}
+        <li class="plan-row{% if done %} done{% endif %}" data-row-for="{{ ex.id }}">
+          <a class="plan-main" data-open-exercise="{{ ex.id }}"
+             href="{{ url_for('set_entry', session_id=session_row.id, exercise_id=ex.id) }}">
+            <span class="plan-name">{{ ex.name }}</span>
+            <span class="plan-target">{{ ex.target_sets }}×{{ ex.target_reps }}{% if not ex.uses_weight %} · bodyweight{% endif %}</span>
+          </a>
+          <span class="plan-count" data-count-for="{{ ex.id }}">{{ ex.sets | length }}{% if ex.target_sets %}/{{ ex.target_sets }}{% endif %}</span>
+          <form method="post"
+                action="{{ url_for('remove_exercise', session_id=session_row.id, exercise_id=ex.id) }}"
+                onsubmit="return confirm('Remove {{ ex.name }} from this session?');">
+            <button type="submit" class="plan-remove" aria-label="Remove {{ ex.name }}">×</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
 
-<a class="btn add-btn" href="{{ url_for('add_exercise', session_id=session_row.id) }}">+ Add exercise</a>
+  <a class="btn add-btn" href="{{ url_for('add_exercise', session_id=session_row.id) }}">+ Add exercise</a>
 
-{% if session_row.finished_at %}
-  <p class="muted finished-note">This workout was finished on {{ session_row.finished_at[:16] | replace('T', ' at ') }}.</p>
-  <form method="post" action="{{ url_for('resume_session', session_id=session_row.id) }}">
-    <button type="submit" class="btn finish-btn">Reopen workout</button>
-  </form>
-{% else %}
-  <form method="post" action="{{ url_for('finish_session', session_id=session_row.id) }}"
-        onsubmit="return confirm('Finish this workout? You can reopen it later from History.');">
-    <button type="submit" class="btn finish-btn">Finish workout</button>
-  </form>
-{% endif %}
+  {% if session_row.finished_at %}
+    <p class="muted finished-note">Finished on {{ session_row.finished_at[:16] | replace('T', ' at ') }}.</p>
+    <form method="post" action="{{ url_for('resume_session', session_id=session_row.id) }}">
+      <button type="submit" class="btn finish-btn">Reopen workout</button>
+    </form>
+  {% else %}
+    <form method="post" action="{{ url_for('finish_session', session_id=session_row.id) }}"
+          onsubmit="return confirm('Finish this workout? You can reopen it later from History.');">
+      <button type="submit" class="btn finish-btn">Finish workout</button>
+    </form>
+  {% endif %}
 
-<div class="card notes-card">
-  <h3>Notes <span class="muted">(abs / cardio / anything else)</span></h3>
-  <textarea id="session-notes" rows="3" placeholder="e.g. 3x15 hanging leg raise, 10 min bike">{{ session_row.notes or '' }}</textarea>
-  <button type="button" id="save-notes" class="btn small">Save notes</button>
-  <span id="notes-saved" class="muted" hidden>Saved.</span>
+  <div class="card notes-card">
+    <h3>Notes <span class="muted">(abs / cardio / anything else)</span></h3>
+    <textarea id="session-notes" rows="3" placeholder="e.g. 3x15 hanging leg raise, 10 min bike">{{ session_row.notes or '' }}</textarea>
+    <button type="button" id="save-notes" class="btn small">Save notes</button>
+    <span id="notes-saved" class="muted" hidden>Saved.</span>
+  </div>
+</div>
+
+<!-- Set entry, rendered client-side from data already on the page: opening it
+     costs no request, which is the whole point on a slow host. -->
+<div id="entry-view" hidden>
+  <div class="entry-head">
+    <button type="button" class="back" data-role="close-entry" aria-label="Back">‹</button>
+    <h1 class="entry-title" data-role="ex-name"></h1>
+    <span class="entry-target" data-role="ex-target"></span>
+  </div>
+
+  <div class="stat-chips">
+    <button type="button" class="stat-chip" data-role="recall-prev">
+      <span class="stat-label">Previous</span>
+      <span class="stat-value" data-role="prev-value">—</span>
+    </button>
+    <button type="button" class="stat-chip pb" data-role="recall-pb">
+      <span class="stat-label">PB</span>
+      <span class="stat-value" data-role="pb-value">—</span>
+    </button>
+  </div>
+
+  <div class="hero">
+    <button type="button" class="hero-field" data-field="weight">
+      <span class="hero-label">Weight</span>
+      <span class="hero-number"><span data-role="weight-display">0</span><span class="hero-unit">kg</span></span>
+    </button>
+    <button type="button" class="hero-field" data-field="reps">
+      <span class="hero-label">Reps</span>
+      <span class="hero-number"><span data-role="reps-display">0</span><span class="hero-unit">reps</span></span>
+    </button>
+  </div>
+
+  <div class="steppers" data-role="steppers"></div>
+
+  <div class="entry-bar">
+    <span class="entry-summary" data-role="summary"></span>
+    <button type="button" class="btn primary add-set" data-role="add-set">Add set</button>
+  </div>
+
+  <h2 class="muscle-heading">This session</h2>
+  <ul class="set-list" data-role="set-list"></ul>
+  <p class="muted empty-note" data-role="empty-note">No sets logged yet.</p>
 </div>
 
 {% endblock %}
 
 {% block head %}
-<script>window.NOTES_URL = "{{ url_for('session_notes', session_id=session_row.id) }}";</script>
-<script src="{{ url_for('static', filename='session.js') }}" defer></script>
+<script id="session-data" type="application/json">{{ exercises_json | tojson }}</script>
+<script>
+  window.SESSION = {
+    id: {{ session_row.id }},
+    logUrl: "{{ url_for('log_set', session_id=session_row.id) }}",
+    notesUrl: "{{ url_for('session_notes', session_id=session_row.id) }}",
+    deleteBase: "{{ url_for('session_log', session_id=session_row.id) }}/set/",
+    entryBase: "{{ url_for('session_log', session_id=session_row.id) }}/exercise/"
+  };
+</script>
+<script src="{{ static_url('session.js') }}" defer></script>
 {% endblock %}

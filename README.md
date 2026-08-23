@@ -33,10 +33,44 @@ vanilla JS + Chart.js (via CDN). No build step.
   change its date and notes, correct any set's weight or reps, delete individual
   sets (the rest renumber), or delete the whole session. Clearing a weight field
   turns that set into a bodyweight set.
+- **The set screen is not a separate page** — it opens over the plan instantly
+  from data already loaded. Its URL still updates, so refreshing or sharing a
+  link works, the browser back button returns to the plan, and with JavaScript
+  off the link falls back to a server-rendered page.
 - **Exporting**: the **⬇ Export CSV** button on the History page downloads one
   row per set (date, split, muscle group, exercise, set number, weight, reps,
   notes). It respects whatever split/exercise filter is active, so you can export
   everything or just one lift. You only ever export your own history.
+
+## Performance
+
+The host is slow to answer, so the app is built to ask it as little as possible.
+
+- **Logging costs no page loads.** The session page ships the data for every
+  exercise on the plan (previous, PB, target, sets so far — about 2.5KB of JSON),
+  and the set screen is rendered from that in the browser. Opening an exercise,
+  going back, and switching between exercises are all instant and make zero
+  requests. The only thing that talks to the server during a workout is the
+  actual write when you add or delete a set. A whole workout is one page load
+  plus one small POST per set, where it used to be a full page load each way for
+  every exercise.
+- **Static files are fetched once, ever.** Every asset URL carries a hash of its
+  contents (`style.css?v=a6b7b9af1e`) and is served with a one-year immutable
+  cache, so the browser never re-requests it — not even a 304, which still costs
+  a full round trip on a slow host. Changing a file changes its URL, so deploys
+  still take effect immediately.
+- **A service worker precaches the shell** (CSS + JS) and keeps the last version
+  of each page you've visited. Repeat visits render without waiting on the
+  server, and a dropped signal still shows the last state instead of an error.
+  It never caches writes or the CSV export.
+- **No CDN.** The progress chart is ~5KB of inline SVG rather than a ~200KB
+  charting library, so there's no third-party round trip and the page works on a
+  bad connection.
+- **Installable.** There's a web app manifest, so "Add to Home Screen" gives you
+  a full-screen icon with no browser chrome — which, combined with the service
+  worker, makes it open instantly.
+
+Total assets: ~8.5KB gzipped, downloaded once. A session page is ~2.8KB gzipped.
 
 ## Local development
 

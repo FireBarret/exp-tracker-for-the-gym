@@ -454,3 +454,67 @@ def reopen_session(conn, session_id):
     """Mark a finished session as in progress again (used by Resume on history)."""
     conn.execute("UPDATE sessions SET finished_at = NULL WHERE id = ?", (session_id,))
     conn.commit()
+
+def get_session_exercise_data(conn, user_id, session_id):
+    """Everything the log screen needs for every exercise on the plan, in two
+    queries rather than three per exercise.
+
+    The session page ships this to the browser as JSON so tapping an exercise
+    opens its entry screen with no further request -- which matters a lot when
+    the server is slow to answer.
+    """
+    rows = conn.execute(
+        """
+        SELECT e.id, e.name, e.muscle_group, e.target_sets, e.target_rep_range,
+               e.step_kg, e.uses_weight, se.sort_order AS plan_order,
+               prev.weight_kg AS prev_weight, prev.reps AS prev_reps,
+               pb.weight_kg   AS pb_weight,   pb.reps   AS pb_reps
+        FROM session_exercises se
+        JOIN exercises e ON e.id = se.exercise_id
+        LEFT JOIN sets prev ON prev.id = (
+            SELECT s.id FROM sets s
+            JOIN sessions ss ON ss.id = s.session_id
+            WHERE ss.user_id = ? AND s.exercise_id = e.id AND s.session_id != ?
+            ORDER BY ss.date DESC, s.id DESC LIMIT 1
+        )
+        LEFT JOIN sets pb ON pb.id = (
+            SELECT s.id FROM sets s
+            JOIN sessions ss ON ss.id = s.session_id
+            WHERE ss.user_id = ? AND s.exercise_id = e.id
+            ORDER BY COALESCE(s.weight_kg, -1) DESC, s.reps DESC, s.id DESC LIMIT 1
+        )
+        WHERE se.session_id = ?
+        ORDER BY se.sort_order, e.id
+        """,
+        (user_id, session_id, user_id, session_id),
+    ).fetchall()
+
+    logged = {}
+    for st in conn.execute(
+        "SELECT id, exercise_id, set_number, weight_kg, reps FROM sets "
+        "WHERE session_id = ? ORDER BY exercise_id, set_number",
+        (session_id,),
+    ).fetchall():
+        logged.setdefault(st["exercise_id"], []).append(
+            {"id": st["id"], "n": st["set_number"],
+             "weight": st["weight_kg"], "reps": st["reps"]}
+        )
+
+    out = []
+    for r in rows:
+        sets = logged.get(r["id"], [])
+        out.append({
+            "id": r["id"],
+            "name": r["name"],
+            "muscle_group": r["muscle_group"],
+            "target_sets": r["target_sets"],
+            "target_reps": r["target_rep_range"],
+            "step": r["step_kg"],
+            "uses_weight": bool(r["uses_weight"]),
+            "previous": None if r["prev_reps"] is None else
+                        {"weight": r["prev_weight"], "reps": r["prev_reps"]},
+            "pb": None if r["pb_reps"] is None else
+                  {"weight": r["pb_weight"], "reps": r["pb_reps"]},
+            "sets": sets,
+        })
+    return out

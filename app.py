@@ -1,11 +1,12 @@
 import csv
+import hashlib
 import io
 import os
 from datetime import date
 from functools import wraps
 
-from flask import (Flask, Response, abort, g, jsonify, redirect,
-                   render_template, request, session, url_for)
+from flask import (Flask, Response, abort, g, jsonify, make_response,
+                   redirect, render_template, request, session, url_for)
 
 try:
     from dotenv import load_dotenv
@@ -28,6 +29,85 @@ def trim_zeros(value):
         return ""
     text = f"{float(value):g}"
     return text
+
+
+# ---- static assets: versioned URLs + long-lived caching ----
+#
+# PythonAnywhere's free tier is slow to answer, so the goal is to make the
+# browser ask it as rarely as possible. Static files are served with a one-year
+# immutable cache and a content-hash in the query string, so a changed file gets
+# a new URL (and is refetched) while an unchanged one is never requested again --
+# not even a 304 revalidation, which still costs a full round trip.
+
+_ASSET_HASHES = {}
+
+
+def asset_hash(filename):
+    if app.debug:
+        _ASSET_HASHES.pop(filename, None)
+    if filename not in _ASSET_HASHES:
+        path = os.path.join(app.static_folder, filename)
+        try:
+            with open(path, "rb") as f:
+                _ASSET_HASHES[filename] = hashlib.md5(f.read()).hexdigest()[:10]
+        except OSError:
+            _ASSET_HASHES[filename] = "0"
+    return _ASSET_HASHES[filename]
+
+
+@app.template_global("static_url")
+def static_url(filename):
+    """url_for('static', ...) plus a content hash, so caching can be aggressive."""
+    return url_for("static", filename=filename, v=asset_hash(filename))
+
+
+@app.after_request
+def add_cache_headers(response):
+    if request.path.startswith("/static/"):
+        if request.args.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+# ---- PWA: service worker + manifest ----
+#
+# The worker is served from the root so its scope covers the whole app, and it's
+# rendered rather than static so the fingerprinted asset list can be baked in.
+
+PRECACHE_ASSETS = ["style.css", "session.js", "set_entry.js", "chart.js"]
+
+
+@app.route("/sw.js")
+def service_worker():
+    urls = [static_url(f) for f in PRECACHE_ASSETS]
+    version = hashlib.md5("".join(urls).encode()).hexdigest()[:10]
+    resp = make_response(render_template("sw.js", version=version, precache=urls))
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Cache-Control"] = "no-cache"      # always check for a new worker
+    return resp
+
+
+@app.route("/manifest.webmanifest")
+def manifest():
+    resp = jsonify({
+        "name": "Gym Log",
+        "short_name": "Gym Log",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#0f1115",
+        "theme_color": "#0f1115",
+        "icons": [{
+            "src": url_for("static", filename="icon.svg"),
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable",
+        }],
+    })
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
 
 
 @app.context_processor
@@ -164,7 +244,9 @@ def start_session():
 def session_log(session_id):
     sess = owned_session(session_id)
     split = models.get_split(g.db, sess["split_id"])
-    exercises = models.get_session_exercises(g.db, session_id)
+    # One batched fetch: the page ships this to the browser so the set screen
+    # opens without another request.
+    exercises = models.get_session_exercise_data(g.db, session["user_id"], session_id)
 
     grouped = {}
     for ex in exercises:
@@ -175,6 +257,7 @@ def session_log(session_id):
         session_row=sess,
         split=split,
         grouped=grouped,
+        exercises_json=exercises,
         exercise_count=len(exercises),
         user_name=session.get("user_name"),
     )
