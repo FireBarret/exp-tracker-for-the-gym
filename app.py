@@ -31,6 +31,49 @@ def trim_zeros(value):
     return text
 
 
+# ---- schema check on startup ----
+#
+# A deploy that adds a column shouldn't take the site down until someone
+# remembers to run migrate.py, so additive changes are applied here at import.
+# The one migration that rewrites data (six splits to three) is not automatic;
+# if it's still outstanding, every page says so instead of throwing a 500.
+
+SCHEMA_NEEDS_MIGRATION = False
+
+def _check_schema():
+    global SCHEMA_NEEDS_MIGRATION
+    try:
+        conn = models.get_db()
+        try:
+            applied = models.ensure_schema_current(conn)
+            if applied:
+                app.logger.info("Applied schema updates: %s", ", ".join(applied))
+            SCHEMA_NEEDS_MIGRATION = models.needs_full_migration(conn)
+        finally:
+            conn.close()
+    except Exception:
+        # Never let a schema probe stop the app from booting.
+        app.logger.exception("Schema check failed")
+
+_check_schema()
+
+
+@app.route("/healthz")
+def healthz():
+    """Plain-text status, handy when a deploy misbehaves."""
+    try:
+        conn = models.get_db()
+        counts = {
+            t: conn.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]
+            for t in ("users", "splits", "exercises", "sessions", "sets")
+        }
+        conn.close()
+        return jsonify({"ok": True, "needs_full_migration": SCHEMA_NEEDS_MIGRATION,
+                        "counts": counts})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"{type(exc).__name__}: {exc}"}), 500
+
+
 # ---- static assets: versioned URLs + long-lived caching ----
 #
 # PythonAnywhere's free tier is slow to answer, so the goal is to make the
@@ -108,6 +151,11 @@ def manifest():
     })
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
+
+
+@app.context_processor
+def inject_schema_warning():
+    return {"schema_needs_migration": SCHEMA_NEEDS_MIGRATION}
 
 
 @app.context_processor

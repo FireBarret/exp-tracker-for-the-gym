@@ -31,6 +31,12 @@
       </nav>
     {% endif %}
   </header>
+  {% if schema_needs_migration %}
+    <div class="schema-warning">
+      This database still uses the old six-split layout. Run
+      <code>python migrate.py</code> in a Bash console, then reload the web app.
+    </div>
+  {% endif %}
   <main class="container">
     {% block content %}{% endblock %}
   </main>

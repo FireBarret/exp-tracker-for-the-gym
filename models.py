@@ -518,3 +518,84 @@ def get_session_exercise_data(conn, user_id, session_id):
             "sets": sets,
         })
     return out
+
+# ---- schema self-healing ----
+#
+# Additive schema changes are applied on startup rather than waiting for someone
+# to remember `python migrate.py`. Every statement here is additive (a new column
+# or table), so it cannot lose data, and each is guarded by a check plus a
+# tolerant except in case two workers start at once.
+#
+# The one migration NOT done here is the six-splits-to-three rebuild, which
+# rewrites rows and takes a backup first -- that stays a deliberate manual step.
+
+_ADDITIVE_COLUMNS = [
+    # (table, column, definition, backfill SQL or None)
+    ("sessions", "notes", "TEXT", None),
+    ("sessions", "finished_at", "TEXT",
+     "UPDATE sessions SET finished_at = date WHERE finished_at IS NULL"),
+    ("exercises", "uses_weight", "INTEGER NOT NULL DEFAULT 1", None),
+    ("exercises", "is_custom", "INTEGER NOT NULL DEFAULT 0", None),
+    ("splits", "sort_order", "INTEGER NOT NULL DEFAULT 0", None),
+    ("splits", "is_custom", "INTEGER NOT NULL DEFAULT 0", None),
+]
+
+
+def _table_exists(conn, name):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+
+
+def ensure_schema_current(conn):
+    """Bring an older database up to date. Idempotent; returns what it changed."""
+    applied = []
+
+    for table, column, definition, backfill in _ADDITIVE_COLUMNS:
+        if not _table_exists(conn, table):
+            continue
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column in cols:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            if backfill:
+                conn.execute(backfill)
+            conn.commit()
+            applied.append(f"{table}.{column}")
+        except sqlite3.OperationalError as exc:
+            # Another worker got there first -- fine. Anything else is real.
+            if "duplicate column" not in str(exc).lower():
+                raise
+
+    if _table_exists(conn, "sessions") and not _table_exists(conn, "session_exercises"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS session_exercises (
+              id INTEGER PRIMARY KEY,
+              session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+              exercise_id INTEGER NOT NULL REFERENCES exercises(id),
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              UNIQUE(session_id, exercise_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_exercises_session
+              ON session_exercises(session_id);
+            """
+        )
+        # Give past sessions a plan built from whatever they actually logged.
+        conn.execute(
+            "INSERT OR IGNORE INTO session_exercises (session_id, exercise_id, sort_order) "
+            "SELECT DISTINCT session_id, exercise_id, 0 FROM sets"
+        )
+        conn.commit()
+        applied.append("session_exercises")
+
+    return applied
+
+
+def needs_full_migration(conn):
+    """True when the six-split layout is still in place and migrate.py must run."""
+    if not _table_exists(conn, "splits"):
+        return False
+    names = {r["name"] for r in conn.execute("SELECT name FROM splits").fetchall()}
+    return bool(names & {"Push 1", "Push 2", "Pull 1", "Pull 2", "Legs 1", "Legs 2"})

@@ -95,8 +95,14 @@ Rename the two seeded users ("Dariush", "Partner") by editing `USERS` in
 
 ## Upgrading an existing database
 
-If you already have a `gym.db` from the original six-split version
-(Push 1 / Push 2 / Legs 1 / …), run the migration once:
+Most schema changes apply themselves. On startup the app adds any missing
+columns or tables to `gym.db` (these changes are purely additive, so they can't
+lose data) — a deploy that adds a column no longer takes the site down while you
+remember to run a command.
+
+The one exception is the original six-split layout (Push 1 / Push 2 / Legs 1 / …),
+which has to rewrite rows and takes a backup first, so it stays deliberate. If
+your database still has it, every page shows a banner saying so. Run it once:
 
 ```bash
 source venv/bin/activate      # on PythonAnywhere: workon gym-env
@@ -152,9 +158,13 @@ workon gym-env
 cd ~/exp-tracker-for-the-gym
 git pull
 pip install -r requirements.txt   # only if requirements changed
-python migrate.py                  # applies any schema changes; safe to run every time
 ```
-Then hit **Reload** on the Web tab. Your `.env` and `gym.db` are untouched by pulls.
+Then hit **Reload** on the Web tab. Your `.env` and `gym.db` are untouched by
+pulls, and any additive schema changes apply themselves on the first request.
+
+If something looks wrong after a deploy, `https://YOUR_USERNAME.pythonanywhere.com/healthz`
+reports whether the database is reachable, whether a manual migration is
+outstanding, and row counts for each table.
 
 ## Notes
 

@@ -18,7 +18,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from models import DB_PATH, get_db, init_schema
+from models import DB_PATH, ensure_schema_current, get_db, init_schema
 from seed import seed
 
 # Old split name -> new split name
@@ -73,20 +73,11 @@ def resolve_name(old_split, name):
 
 
 def ensure_columns(conn):
-    """Additive migrations for a database already on the three-split schema.
-
-    Currently: sessions.finished_at, which marks a workout as still in progress.
-    Existing sessions are backfilled as finished so old workouts don't offer
-    themselves up to be resumed.
-    """
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()}
-    if "finished_at" in cols:
-        return False
-    conn.execute("ALTER TABLE sessions ADD COLUMN finished_at TEXT")
-    conn.execute("UPDATE sessions SET finished_at = date WHERE finished_at IS NULL")
-    conn.commit()
-    print("  added sessions.finished_at and marked existing sessions finished")
-    return True
+    """Additive migrations, shared with the check the app runs on startup."""
+    applied = ensure_schema_current(conn)
+    for item in applied:
+        print(f"  added {item}")
+    return bool(applied)
 
 
 def main():
