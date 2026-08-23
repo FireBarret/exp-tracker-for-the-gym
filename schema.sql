@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id INTEGER NOT NULL REFERENCES users(id),
   split_id INTEGER NOT NULL REFERENCES splits(id),
   date TEXT NOT NULL,             -- ISO date, defaults to today
-  notes TEXT
+  notes TEXT,
+  finished_at TEXT                -- NULL while the workout is still in progress
 );
 
 -- Which exercises are on the plan for a given session. Pre-filled from the split

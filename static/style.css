@@ -268,3 +268,51 @@ h2.muscle-heading {
 .edit-actions { margin: 20px 0 28px; }
 .edit-actions .btn { width: 100%; }
 .danger-btn { width: 100%; border-color: rgba(255, 107, 107, 0.5); color: var(--danger); }
+
+/* ---- resuming an in-progress workout ---- */
+
+.resume-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(62, 207, 142, 0.15); border: 1px solid rgba(62, 207, 142, 0.5);
+  color: var(--success) !important; border-radius: 999px;
+  padding: 3px 10px; font-size: 0.78rem; font-weight: 700;
+}
+
+.resume-card {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(180deg, rgba(62, 207, 142, 0.12), transparent), var(--card);
+  border: 1px solid rgba(62, 207, 142, 0.5);
+  border-radius: 12px; padding: 16px; margin-bottom: 8px;
+}
+.resume-text { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.resume-label {
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+  font-weight: 800; color: var(--success);
+}
+.resume-split { font-size: 1.2rem; font-weight: 800; }
+.resume-meta { font-size: 0.8rem; color: var(--muted); }
+.resume-actions { display: flex; gap: 8px; align-items: center; flex: 0 0 auto; }
+.resume-note { font-size: 0.78rem; margin: 0 0 22px; }
+
+.finish-btn {
+  width: 100%; margin-top: 20px;
+  border-color: rgba(62, 207, 142, 0.5); color: var(--success); font-weight: 700;
+}
+.finished-note { font-size: 0.85rem; margin-top: 20px; margin-bottom: 0; }
+
+.badge-live {
+  display: inline-block; vertical-align: middle; margin-left: 6px;
+  background: rgba(62, 207, 142, 0.15); border: 1px solid rgba(62, 207, 142, 0.5);
+  color: var(--success); border-radius: 999px;
+  padding: 1px 8px; font-size: 0.65rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.inline-resume { display: inline; flex: 0 0 auto; }
+.resume-link {
+  color: var(--success); text-decoration: none;
+  font-size: 0.85rem; font-weight: 700; flex: 0 0 auto;
+}
+.resume-link.as-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--success); font-size: 0.85rem; font-weight: 700;
+}

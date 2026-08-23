@@ -30,6 +30,17 @@ def trim_zeros(value):
     return text
 
 
+@app.context_processor
+def inject_active_session():
+    """Every page can offer a way back into an unfinished workout."""
+    if not session.get("authed") or not session.get("user_id"):
+        return {}
+    db = getattr(g, "db", None)
+    if db is None:
+        return {}
+    return {"active_session": models.get_active_session(db, session["user_id"])}
+
+
 # ---- db lifecycle ----
 
 @app.before_request
@@ -116,6 +127,7 @@ def splits():
     return render_template(
         "splits.html",
         splits=models.get_splits(g.db),
+        resumable=models.get_active_session(g.db, session["user_id"]),
         user_name=session.get("user_name"),
     )
 
@@ -225,6 +237,30 @@ def new_exercise(session_id):
         uses_weight=request.form.get("uses_weight") == "on",
     )
     models.add_exercise_to_session(g.db, session_id, exercise_id)
+    return redirect(url_for("session_log", session_id=session_id))
+
+
+@app.route("/session/<int:session_id>/finish", methods=["POST"])
+@login_required
+@user_required
+def finish_session(session_id):
+    owned_session(session_id)
+    was_empty = models.finish_session(g.db, session_id)
+    if was_empty:
+        return redirect(url_for("splits"))
+    return redirect(url_for("history"))
+
+
+@app.route("/session/<int:session_id>/resume", methods=["POST"])
+@login_required
+@user_required
+def resume_session(session_id):
+    """Reopen a session that was finished (or auto-closed) so it can be added to."""
+    owned_session(session_id)
+    active = models.get_active_session(g.db, session["user_id"])
+    if active and active["id"] != session_id:
+        models.finish_session(g.db, active["id"])
+    models.reopen_session(g.db, session_id)
     return redirect(url_for("session_log", session_id=session_id))
 
 

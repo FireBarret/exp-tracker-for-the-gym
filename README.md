@@ -23,6 +23,12 @@ vanilla JS + Chart.js (via CDN). No build step.
   progress are all per-user.
 - **Bodyweight exercises** (`uses_weight = 0`, e.g. Pullups) show reps only — no kg.
 - **Abs / cardio** go in the free-text Notes box at the bottom of the session.
+- **Resuming**: a workout stays in progress until you tap **Finish workout**, so
+  closing the tab (or your phone locking) loses nothing. The splits screen shows
+  a *Workout in progress* card with a **Resume** button, and a green Resume pill
+  sits in the nav from any page. Only one workout is open at a time — starting a
+  different split finishes the previous one first. Finished sessions can be put
+  back into progress with **Reopen** on the History page.
 - **Editing history**: every session on the History page has an **Edit** link —
   change its date and notes, correct any set's weight or reps, delete individual
   sets (the rest renumber), or delete the whole session. Clearing a weight field
@@ -112,7 +118,7 @@ workon gym-env
 cd ~/exp-tracker-for-the-gym
 git pull
 pip install -r requirements.txt   # only if requirements changed
-python migrate.py                  # only when a release says the schema changed
+python migrate.py                  # applies any schema changes; safe to run every time
 ```
 Then hit **Reload** on the Web tab. Your `.env` and `gym.db` are untouched by pulls.
 
@@ -126,3 +132,7 @@ Then hit **Reload** on the Web tab. Your `.env` and `gym.db` are untouched by pu
   apostrophe, so a creatively named exercise can't run as a spreadsheet formula.
 - Since `gym.db` lives on PythonAnywhere's disk and isn't in git, the CSV export
   doubles as your backup — worth pulling one down every so often.
+- Finishing a workout you logged nothing into simply discards it rather than
+  leaving an empty session in your history. A workout left open for more than a
+  day stops offering to resume (it just becomes ordinary history), so a session
+  started late at night can still be resumed the next morning.

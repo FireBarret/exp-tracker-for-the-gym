@@ -14,6 +14,11 @@
     {% if session.get('user_id') %}
       <nav class="topnav">
         <span class="who">{{ session.get('user_name') }}</span>
+        {% if active_session %}
+          <a class="resume-pill" href="{{ url_for('session_log', session_id=active_session.id) }}">
+            ● Resume {{ active_session.split_name }}
+          </a>
+        {% endif %}
         <a href="{{ url_for('splits') }}">Splits</a>
         <a href="{{ url_for('history') }}">History</a>
         <a href="{{ url_for('progress') }}">Progress</a>

@@ -30,6 +30,18 @@
 
 <a class="btn add-btn" href="{{ url_for('add_exercise', session_id=session_row.id) }}">+ Add exercise</a>
 
+{% if session_row.finished_at %}
+  <p class="muted finished-note">This workout was finished on {{ session_row.finished_at[:16] | replace('T', ' at ') }}.</p>
+  <form method="post" action="{{ url_for('resume_session', session_id=session_row.id) }}">
+    <button type="submit" class="btn finish-btn">Reopen workout</button>
+  </form>
+{% else %}
+  <form method="post" action="{{ url_for('finish_session', session_id=session_row.id) }}"
+        onsubmit="return confirm('Finish this workout? You can reopen it later from History.');">
+    <button type="submit" class="btn finish-btn">Finish workout</button>
+  </form>
+{% endif %}
+
 <div class="card notes-card">
   <h3>Notes <span class="muted">(abs / cardio / anything else)</span></h3>
   <textarea id="session-notes" rows="3" placeholder="e.g. 3x15 hanging leg raise, 10 min bike">{{ session_row.notes or '' }}</textarea>

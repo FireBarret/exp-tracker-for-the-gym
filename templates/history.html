@@ -32,7 +32,16 @@
   {% set sess = entry.session %}
   <div class="card session-card">
     <div class="session-head">
-      <h3>{{ sess.date }} — {{ sess.split_name }}</h3>
+      <h3>{{ sess.date }} — {{ sess.split_name }}
+        {% if not sess.finished_at %}<span class="badge-live">in progress</span>{% endif %}
+      </h3>
+      {% if not sess.finished_at %}
+        <a class="resume-link" href="{{ url_for('session_log', session_id=sess.id) }}">Resume</a>
+      {% else %}
+        <form method="post" action="{{ url_for('resume_session', session_id=sess.id) }}" class="inline-resume">
+          <button type="submit" class="resume-link as-link">Reopen</button>
+        </form>
+      {% endif %}
       <a class="edit-link" href="{{ url_for('edit_session', session_id=sess.id) }}">Edit</a>
     </div>
     {% if sess.notes %}<p class="notes">{{ sess.notes }}</p>{% endif %}

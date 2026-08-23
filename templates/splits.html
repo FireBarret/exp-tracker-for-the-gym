@@ -2,6 +2,27 @@
 {% block title %}Pick a split — Gym Log{% endblock %}
 {% block content %}
 
+{% if resumable %}
+  <div class="resume-card">
+    <div class="resume-text">
+      <span class="resume-label">Workout in progress</span>
+      <span class="resume-split">{{ resumable.split_name }}</span>
+      <span class="resume-meta">
+        {{ resumable.date }} ·
+        {{ resumable.set_count }} set{{ '' if resumable.set_count == 1 else 's' }} logged
+      </span>
+    </div>
+    <div class="resume-actions">
+      <a class="btn primary" href="{{ url_for('session_log', session_id=resumable.id) }}">Resume</a>
+      <form method="post" action="{{ url_for('finish_session', session_id=resumable.id) }}"
+            onsubmit="return confirm('Finish this {{ resumable.split_name }} workout?');">
+        <button type="submit" class="btn small">Finish</button>
+      </form>
+    </div>
+  </div>
+  <p class="muted resume-note">Starting a different split below will finish this one first.</p>
+{% endif %}
+
 <h1>Hey {{ user_name }} — what are you training?</h1>
 
 <div class="grid">

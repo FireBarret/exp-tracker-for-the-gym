@@ -1,5 +1,6 @@
 """SQLite access helpers. Plain sqlite3, no ORM -- this app is small enough not to need one."""
 import sqlite3
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "gym.db"
@@ -150,6 +151,10 @@ def get_pb_for_exercise(conn, user_id, exercise_id):
 # ---- sessions ----
 
 def create_session(conn, user_id, split_id, date):
+    # Only one workout can be in progress at a time -- close whatever was left open.
+    active = get_active_session(conn, user_id)
+    if active:
+        finish_session(conn, active["id"])
     cur = conn.execute(
         "INSERT INTO sessions (user_id, split_id, date) VALUES (?, ?, ?)",
         (user_id, split_id, date),
@@ -400,3 +405,52 @@ def get_export_rows(conn, user_id, split_id=None, exercise_id=None):
         params.append(exercise_id)
     query += " ORDER BY sessions.date DESC, sessions.id DESC, exercises.name, sets.set_number"
     return conn.execute(query, params).fetchall()
+
+# ---- resuming an in-progress workout ----
+
+def get_active_session(conn, user_id, within_days=1):
+    """The workout this user still has open, if any.
+
+    A session counts as in progress until it's explicitly finished. Anything
+    older than `within_days` is ignored so a workout abandoned last week doesn't
+    keep offering itself -- the window is a day rather than "today" so a session
+    started before midnight can still be resumed after it.
+    """
+    cutoff = (date.today() - timedelta(days=within_days)).isoformat()
+    return conn.execute(
+        """
+        SELECT sessions.*, splits.name AS split_name,
+               (SELECT COUNT(*) FROM sets WHERE sets.session_id = sessions.id) AS set_count
+        FROM sessions
+        JOIN splits ON splits.id = sessions.split_id
+        WHERE sessions.user_id = ?
+          AND sessions.finished_at IS NULL
+          AND sessions.date >= ?
+        ORDER BY sessions.id DESC
+        LIMIT 1
+        """,
+        (user_id, cutoff),
+    ).fetchone()
+
+
+def finish_session(conn, session_id):
+    """Close a workout. An empty one is deleted rather than kept -- a session with
+    no sets is just noise in history. Returns True if it was deleted."""
+    count = conn.execute(
+        "SELECT COUNT(*) AS n FROM sets WHERE session_id = ?", (session_id,)
+    ).fetchone()["n"]
+    if count == 0:
+        delete_session(conn, session_id)
+        return True
+    conn.execute(
+        "UPDATE sessions SET finished_at = ? WHERE id = ?",
+        (datetime.now().isoformat(timespec="seconds"), session_id),
+    )
+    conn.commit()
+    return False
+
+
+def reopen_session(conn, session_id):
+    """Mark a finished session as in progress again (used by Resume on history)."""
+    conn.execute("UPDATE sessions SET finished_at = NULL WHERE id = ?", (session_id,))
+    conn.commit()

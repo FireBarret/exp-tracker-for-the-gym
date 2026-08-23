@@ -72,6 +72,23 @@ def resolve_name(old_split, name):
     return EXERCISE_RENAMES.get((old_split, name), name)
 
 
+def ensure_columns(conn):
+    """Additive migrations for a database already on the three-split schema.
+
+    Currently: sessions.finished_at, which marks a workout as still in progress.
+    Existing sessions are backfilled as finished so old workouts don't offer
+    themselves up to be resumed.
+    """
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+    if "finished_at" in cols:
+        return False
+    conn.execute("ALTER TABLE sessions ADD COLUMN finished_at TEXT")
+    conn.execute("UPDATE sessions SET finished_at = date WHERE finished_at IS NULL")
+    conn.commit()
+    print("  added sessions.finished_at and marked existing sessions finished")
+    return True
+
+
 def main():
     db = Path(DB_PATH)
     if not db.exists():
@@ -85,8 +102,9 @@ def main():
     ).fetchone()
     split_names = {r["name"] for r in conn.execute("SELECT name FROM splits").fetchall()}
     if has_session_exercises and not (split_names & set(SPLIT_MAP)):
+        changed = ensure_columns(conn)
         conn.close()
-        print("Database already migrated -- nothing to do.")
+        print("Schema updated." if changed else "Database already up to date -- nothing to do.")
         return
 
     users, sessions, sets = read_old(conn)
@@ -168,6 +186,9 @@ def main():
             "INSERT OR IGNORE INTO session_exercises (session_id, exercise_id, sort_order) VALUES (?, ?, 0)",
             (session_id, ex_id),
         )
+
+    # everything carried over is history, not a workout still in progress
+    new.execute("UPDATE sessions SET finished_at = date WHERE finished_at IS NULL")
 
     new.commit()
     n_users = new.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
