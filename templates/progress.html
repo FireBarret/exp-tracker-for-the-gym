@@ -1,28 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Progress — Gym Log{% endblock %}
+{% block title %}{{ t('progress.title') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
-<h1>Progress <span class="muted">— {{ user_name }}</span></h1>
+<h1>{{ t('progress.title') }} <span class="muted">— {{ user_name }}</span></h1>
 
 <form method="get" class="filter-row">
   <select name="exercise_id" onchange="this.form.submit()">
-    <option value="">Pick an exercise…</option>
+    <option value="">{{ t('progress.pick') }}</option>
     {% for ex in exercises %}
-      <option value="{{ ex.id }}" {% if selected_exercise and selected_exercise.id == ex.id %}selected{% endif %}>{{ ex.name }}</option>
+      <option value="{{ ex.id }}" {% if selected_exercise and selected_exercise.id == ex.id %}selected{% endif %}>{{ dname(ex) }}</option>
     {% endfor %}
   </select>
 </form>
 
 {% if selected_exercise %}
   {% if series %}
+    {% if selected_exercise.weight_mode == 'assisted' %}
+      <p class="assist-note">{{ t('entry.assist_hint') }}</p>
+    {% endif %}
     <div class="chart-wrap">
       <div id="progress-chart"></div>
     </div>
   {% else %}
-    <p class="muted">No logged sets for this exercise yet.</p>
+    <p class="muted">{{ t('progress.none') }}</p>
   {% endif %}
 {% else %}
-  <p class="muted">Pick an exercise above to see your progress.</p>
+  <p class="muted">{{ t('progress.pick_hint') }}</p>
 {% endif %}
 
 {% endblock %}
@@ -30,7 +33,12 @@
 {% block head %}
 <script>
   window.PROGRESS_SERIES = {{ series | tojson }};
-  window.PROGRESS_EXERCISE_NAME = {{ (selected_exercise.name if selected_exercise else "") | tojson }};
+  window.PROGRESS_ASSISTED = {{ (selected_exercise is not none and selected_exercise.weight_mode == 'assisted') | tojson }};
+  window.I18N = {
+    kg: {{ t('entry.unit_kg') | tojson }},
+    pb: {{ t('entry.pb') | tojson }},
+    noWeighted: {{ t('progress.no_weighted') | tojson }}
+  };
 </script>
 <script src="{{ static_url('chart.js') }}" defer></script>
 {% endblock %}

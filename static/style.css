@@ -108,8 +108,9 @@ h2.muscle-heading {
 
 .entry-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .back {
-  color: var(--text); text-decoration: none; font-size: 2rem;
-  line-height: 1; padding: 0 6px 4px 0; font-weight: 300;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text); text-decoration: none; background: none; border: none;
+  padding: 2px 6px 2px 0; cursor: pointer; flex: 0 0 auto;
 }
 .entry-title { margin: 0; font-size: 1.25rem; font-weight: 800; flex: 1 1 auto; }
 .entry-target { color: var(--muted); font-size: 0.8rem; flex: 0 0 auto; }
@@ -387,3 +388,24 @@ input[type="file"] {
   padding: 12px; border-radius: 8px; border: 1px dashed var(--border);
   background: #10131a; color: var(--text); font-size: 0.9rem; width: 100%;
 }
+
+/* ---- language switch ---- */
+
+.lang-switch { display: inline-flex; gap: 2px; margin-left: 2px; }
+.lang-opt {
+  color: var(--muted) !important; font-size: 0.78rem; padding: 2px 7px;
+  border-radius: 999px; border: 1px solid transparent; text-decoration: none;
+}
+.lang-opt.on {
+  color: var(--text) !important; border-color: var(--border); background: var(--card);
+  font-weight: 700;
+}
+
+/* ---- assistance machines ---- */
+
+.assist-note {
+  background: rgba(255, 179, 64, 0.1); border: 1px solid rgba(255, 179, 64, 0.4);
+  color: var(--gold); border-radius: 8px; padding: 8px 12px;
+  font-size: 0.78rem; margin: 0 0 16px;
+}
+.field-hint { font-size: 0.75rem; margin: -6px 0 4px; }

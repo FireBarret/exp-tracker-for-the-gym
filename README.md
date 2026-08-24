@@ -5,7 +5,9 @@ that split's exercises → tap one → set the weight and reps with big +/− bu
 **Add set**. Plus history and a progress chart per exercise.
 
 Stack: Flask + SQLite (plain `sqlite3`, no ORM) + server-rendered templates +
-vanilla JS + Chart.js (via CDN). No build step.
+vanilla JS. No build step, no dependencies beyond Flask.
+
+Available in English and Japanese.
 
 ## How it works
 
@@ -25,7 +27,14 @@ vanilla JS + Chart.js (via CDN). No build step.
   Tap the number that's already active to type an exact value.
 - **Exercises are shared** between both users, but *Previous*, *PB*, history and
   progress are all per-user.
-- **Bodyweight exercises** (`uses_weight = 0`, e.g. Pullups) show reps only — no kg.
+- **Weight modes**: an exercise is one of *added weight* (normal — more kg is a
+  stronger set), *assisted* (assistance machines, where **less** kg is the harder
+  set, so PBs and the progress chart track the minimum instead of the maximum),
+  or *bodyweight only* (reps, no kg at all).
+- **Two languages**: English and 日本語, switchable from the header or the Manage
+  page. The choice is saved per account, so two people sharing the app each get
+  their own. Exercises and splits carry both an English and an optional Japanese
+  name — the seeded ones have both, and the add/edit forms have a field for each.
 - **Abs / cardio** go in the free-text Notes box at the bottom of the session.
 - **Resuming**: a workout stays in progress until you tap **Finish workout**, so
   closing the tab (or your phone locking) loses nothing. The splits screen shows

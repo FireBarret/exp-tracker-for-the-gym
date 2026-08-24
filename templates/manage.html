@@ -1,83 +1,89 @@
 {% extends "base.html" %}
-{% block title %}Manage — Gym Log{% endblock %}
+{% block title %}{{ t('manage.title') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
-<h1>Manage</h1>
+<h1>{{ t('manage.title') }}</h1>
 
-<h2 class="muscle-heading">Accounts</h2>
+<h2 class="muscle-heading">{{ t('manage.language') }}</h2>
+<div class="card manage-card">
+  <div class="data-actions">
+    {% for code, label in languages.items() %}
+      <a class="btn small{% if code == lang %} primary{% endif %}"
+         href="{{ url_for('set_lang', code=code) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<h2 class="muscle-heading">{{ t('manage.accounts') }}</h2>
 {% for u in users %}
   {% set stats = user_stats[u.id] %}
   <div class="card manage-card">
     <form method="post" action="{{ url_for('rename_user', user_id=u.id) }}" class="inline-form">
-      <input type="text" name="name" value="{{ u.name }}" required aria-label="Account name">
-      <button type="submit" class="btn small primary">Save</button>
+      <input type="text" name="name" value="{{ u.name }}" required aria-label="{{ t('login.name') }}">
+      <button type="submit" class="btn small primary">{{ t('manage.save') }}</button>
     </form>
     <p class="manage-meta">
-      {{ stats.sessions }} session{{ '' if stats.sessions == 1 else 's' }},
-      {{ stats.sets }} set{{ '' if stats.sets == 1 else 's' }}
-      {% if u.id == session.get('user_id') %}· <b>signed in</b>{% endif %}
+      {{ t('manage.account_meta', sessions=stats.sessions, sets=stats.sets) }}
+      {% if u.id == session.get('user_id') %}· <b>{{ t('manage.signed_in') }}</b>{% endif %}
     </p>
     <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}"
-          onsubmit="return confirm('Delete {{ u.name }} and all {{ stats.sessions }} of their sessions? This cannot be undone.');">
-      <button type="submit" class="link-danger">Delete account</button>
+          onsubmit="return confirm('{{ t('manage.confirm_account', name=u.name, n=stats.sessions) }}');">
+      <button type="submit" class="link-danger">{{ t('manage.delete_account') }}</button>
     </form>
   </div>
 {% endfor %}
 
-<h2 class="muscle-heading">Splits &amp; exercises</h2>
+<h2 class="muscle-heading">{{ t('manage.splits') }}</h2>
 {% for sp in splits %}
   {% set usage = split_usage[sp.id] %}
   <div class="card manage-card">
     <form method="post" action="{{ url_for('rename_split', split_id=sp.id) }}" class="inline-form">
-      <input type="text" name="name" value="{{ sp.name }}" required aria-label="Split name">
-      <button type="submit" class="btn small primary">Save</button>
+      <input type="text" name="name" value="{{ sp.name }}" required aria-label="{{ t('add.split') }}">
+      <input type="text" name="name_ja" value="{{ sp.name_ja or '' }}" placeholder="日本語" lang="ja">
+      <button type="submit" class="btn small primary">{{ t('manage.save') }}</button>
     </form>
-    <p class="manage-meta">
-      {{ usage.exercises }} exercise{{ '' if usage.exercises == 1 else 's' }},
-      {{ usage.sessions }} session{{ '' if usage.sessions == 1 else 's' }}
-    </p>
+    <p class="manage-meta">{{ t('manage.split_meta', exercises=usage.exercises, sessions=usage.sessions) }}</p>
 
     <ul class="plan-list manage-exercises">
       {% for ex in by_split[sp.id] %}
         <li class="plan-row">
           <a class="plan-main" href="{{ url_for('edit_exercise', exercise_id=ex.id) }}">
-            <span class="plan-name">{{ ex.name }}</span>
+            <span class="plan-name">{{ dname(ex) }}</span>
             <span class="plan-target">
-              {{ ex.muscle_group }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}
-              · +{{ ex.step_kg | trim_zeros }}kg{% if not ex.uses_weight %} · bodyweight{% endif %}
+              {{ muscle(ex.muscle_group) }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}
+              · +{{ ex.step_kg | trim_zeros }}{{ t('entry.unit_kg') }}{% if ex.weight_mode == 'none' %} · {{ t('session.bodyweight') }}{% elif ex.weight_mode == 'assisted' %} · {{ t('entry.assist') }}{% endif %}
             </span>
           </a>
-          <span class="plan-count">edit ›</span>
+          <span class="plan-count">{{ t('manage.edit') }}</span>
         </li>
       {% else %}
-        <li class="muted manage-empty">No exercises in this split.</li>
+        <li class="muted manage-empty">{{ t('manage.no_exercises') }}</li>
       {% endfor %}
     </ul>
 
     <form method="post" action="{{ url_for('delete_split', split_id=sp.id) }}"
-          onsubmit="return confirm('Delete the {{ sp.name }} split, its {{ usage.exercises }} exercise(s) and {{ usage.sessions }} logged session(s)? This cannot be undone.');">
-      <button type="submit" class="link-danger">Delete split</button>
+          onsubmit="return confirm('{{ t('manage.confirm_split', name=sp.name, exercises=usage.exercises, sessions=usage.sessions) }}');">
+      <button type="submit" class="link-danger">{{ t('manage.delete_split') }}</button>
     </form>
   </div>
 {% endfor %}
 
 <details class="disclosure">
-  <summary>+ New split</summary>
+  <summary>{{ t('splits.new') }}</summary>
   <form method="post" action="{{ url_for('new_split') }}" class="inline-form">
-    <input type="text" name="name" placeholder="e.g. Arms, Full body" required>
-    <button type="submit" class="btn small primary">Create</button>
+    <input type="text" name="name" placeholder="{{ t('splits.new_ph') }}" required>
+    <input type="text" name="name_ja" placeholder="日本語" lang="ja">
+    <button type="submit" class="btn small primary">{{ t('splits.create') }}</button>
   </form>
 </details>
 
-<h2 class="muscle-heading">Data</h2>
+<h2 class="muscle-heading">{{ t('manage.data') }}</h2>
 <div class="card manage-card">
-  <p class="manage-meta">
-    Back up everything, or bring history in from a CSV.
-  </p>
+  <p class="manage-meta">{{ t('manage.data_hint') }}</p>
   <div class="data-actions">
-    <a class="btn small" href="{{ url_for('export_db') }}">⬇ Download full backup (.db)</a>
-    <a class="btn small" href="{{ url_for('history') }}">⬇ Export CSV</a>
-    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
+    <a class="btn small" href="{{ url_for('export_db') }}">{{ t('manage.download_db') }}</a>
+    <a class="btn small" href="{{ url_for('history') }}">{{ t('history.export_csv') }}</a>
+    <a class="btn small" href="{{ url_for('import_csv') }}">{{ t('history.import_csv') }}</a>
   </div>
 </div>
 

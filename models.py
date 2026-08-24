@@ -1,5 +1,6 @@
 """SQLite access helpers. Plain sqlite3, no ORM -- this app is small enough not to need one."""
 import sqlite3
+from translations import muscle_group as muscle_group_name
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def get_split(conn, split_id):
     return conn.execute("SELECT * FROM splits WHERE id = ?", (split_id,)).fetchone()
 
 
-def create_split(conn, name):
+def create_split(conn, name, name_ja=None):
     """Add a custom split. Returns its id (existing id if the name is taken)."""
     name = name.strip()
     existing = conn.execute("SELECT id FROM splits WHERE name = ?", (name,)).fetchone()
@@ -50,8 +51,8 @@ def create_split(conn, name):
         "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM splits"
     ).fetchone()["n"]
     cur = conn.execute(
-        "INSERT INTO splits (name, sort_order, is_custom) VALUES (?, ?, 1)",
-        (name, next_order),
+        "INSERT INTO splits (name, name_ja, sort_order, is_custom) VALUES (?, ?, ?, 1)",
+        (name, (name_ja or "").strip() or None, next_order),
     )
     conn.commit()
     return cur.lastrowid
@@ -82,7 +83,8 @@ def get_all_exercises(conn):
 
 
 def create_exercise(conn, split_id, muscle_group, name, target_sets,
-                    target_rep_range, step_kg, uses_weight):
+                    target_rep_range, step_kg, uses_weight=None,
+                    name_ja=None, weight_mode="added"):
     """Add a custom exercise to a split. Returns its id (existing id if duplicate name)."""
     name = name.strip()
     existing = conn.execute(
@@ -94,15 +96,18 @@ def create_exercise(conn, split_id, muscle_group, name, target_sets,
         "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM exercises WHERE split_id = ?",
         (split_id,),
     ).fetchone()["n"]
+    if uses_weight is None:
+        uses_weight = weight_mode != "none"
     cur = conn.execute(
         """
         INSERT INTO exercises
-            (split_id, muscle_group, name, target_sets, target_rep_range,
-             step_kg, sort_order, uses_weight, is_custom)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            (split_id, muscle_group, name, name_ja, target_sets, target_rep_range,
+             step_kg, sort_order, uses_weight, weight_mode, is_custom)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """,
-        (split_id, muscle_group.strip() or "Other", name, target_sets,
-         target_rep_range, step_kg, next_order, 1 if uses_weight else 0),
+        (split_id, muscle_group.strip() or "Other", name, (name_ja or "").strip() or None,
+         target_sets, target_rep_range, step_kg, next_order,
+         1 if uses_weight else 0, weight_mode),
     )
     conn.commit()
     return cur.lastrowid
@@ -131,17 +136,23 @@ def get_last_set_for_exercise(conn, user_id, exercise_id, before_session_id=None
 
 
 def get_pb_for_exercise(conn, user_id, exercise_id):
-    """Personal best for this user+exercise: heaviest set, ties broken by most reps.
+    """Personal best for this user+exercise.
 
-    For bodyweight exercises (no weight recorded) this falls back to the most reps.
+    Normally the heaviest set wins, ties broken by reps. On an assistance machine
+    the scale runs the other way -- less assistance is a stronger effort -- so the
+    lightest set wins instead. Bodyweight exercises fall back to the most reps.
     """
+    exercise = get_exercise(conn, exercise_id)
+    assisted = exercise is not None and exercise["weight_mode"] == "assisted"
+    order = ("COALESCE(sets.weight_kg, 1e9) ASC" if assisted
+             else "COALESCE(sets.weight_kg, -1) DESC")
     return conn.execute(
-        """
+        f"""
         SELECT sets.*, sessions.date
         FROM sets
         JOIN sessions ON sessions.id = sets.session_id
         WHERE sessions.user_id = ? AND sets.exercise_id = ?
-        ORDER BY COALESCE(sets.weight_kg, -1) DESC, sets.reps DESC, sets.id DESC
+        ORDER BY {order}, sets.reps DESC, sets.id DESC
         LIMIT 1
         """,
         (user_id, exercise_id),
@@ -181,7 +192,7 @@ def update_session_notes(conn, session_id, notes):
 
 def get_sessions_for_user(conn, user_id, split_id=None, exercise_id=None):
     query = """
-        SELECT sessions.*, splits.name AS split_name
+        SELECT sessions.*, splits.name AS split_name, splits.name_ja AS split_name_ja
         FROM sessions
         JOIN splits ON splits.id = sessions.split_id
         WHERE sessions.user_id = ?
@@ -267,7 +278,8 @@ def get_addable_exercises(conn, session_id, split_id):
 def get_sets_for_session(conn, session_id):
     return conn.execute(
         """
-        SELECT sets.*, exercises.name AS exercise_name, exercises.muscle_group
+        SELECT sets.*, exercises.name AS exercise_name,
+               exercises.name_ja AS exercise_name_ja, exercises.muscle_group
         FROM sets
         JOIN exercises ON exercises.id = sets.exercise_id
         WHERE sets.session_id = ?
@@ -332,7 +344,7 @@ def get_all_exercise_names(conn, user_id):
     """Distinct exercises this user has ever logged a set for (for the dropdowns)."""
     return conn.execute(
         """
-        SELECT DISTINCT exercises.id, exercises.name
+        SELECT DISTINCT exercises.id, exercises.name, exercises.name_ja
         FROM exercises
         JOIN sets ON sets.exercise_id = exercises.id
         JOIN sessions ON sessions.id = sets.session_id
@@ -344,10 +356,14 @@ def get_all_exercise_names(conn, user_id):
 
 
 def get_progress_series(conn, user_id, exercise_id):
-    """Top set (max weight_kg) per session, in date order, for this user+exercise."""
+    """Best set per session, in date order. 'Best' is the heaviest normally and
+    the lightest on an assistance machine."""
+    exercise = get_exercise(conn, exercise_id)
+    assisted = exercise is not None and exercise["weight_mode"] == "assisted"
+    agg = "MIN" if assisted else "MAX"
     return conn.execute(
-        """
-        SELECT sessions.date, MAX(sets.weight_kg) AS top_weight_kg
+        f"""
+        SELECT sessions.date, {agg}(sets.weight_kg) AS top_weight_kg
         FROM sets
         JOIN sessions ON sessions.id = sets.session_id
         WHERE sessions.user_id = ? AND sets.exercise_id = ?
@@ -419,7 +435,7 @@ def get_active_session(conn, user_id, within_days=1):
     cutoff = (date.today() - timedelta(days=within_days)).isoformat()
     return conn.execute(
         """
-        SELECT sessions.*, splits.name AS split_name,
+        SELECT sessions.*, splits.name AS split_name, splits.name_ja AS split_name_ja,
                (SELECT COUNT(*) FROM sets WHERE sets.session_id = sessions.id) AS set_count
         FROM sessions
         JOIN splits ON splits.id = sessions.split_id
@@ -455,7 +471,7 @@ def reopen_session(conn, session_id):
     conn.execute("UPDATE sessions SET finished_at = NULL WHERE id = ?", (session_id,))
     conn.commit()
 
-def get_session_exercise_data(conn, user_id, session_id):
+def get_session_exercise_data(conn, user_id, session_id, lang="en"):
     """Everything the log screen needs for every exercise on the plan, in two
     queries rather than three per exercise.
 
@@ -465,8 +481,9 @@ def get_session_exercise_data(conn, user_id, session_id):
     """
     rows = conn.execute(
         """
-        SELECT e.id, e.name, e.muscle_group, e.target_sets, e.target_rep_range,
-               e.step_kg, e.uses_weight, se.sort_order AS plan_order,
+        SELECT e.id, e.name, e.name_ja, e.muscle_group, e.target_sets,
+               e.target_rep_range, e.step_kg, e.uses_weight, e.weight_mode,
+               se.sort_order AS plan_order,
                prev.weight_kg AS prev_weight, prev.reps AS prev_reps,
                pb.weight_kg   AS pb_weight,   pb.reps   AS pb_reps
         FROM session_exercises se
@@ -505,8 +522,9 @@ def get_session_exercise_data(conn, user_id, session_id):
         sets = logged.get(r["id"], [])
         out.append({
             "id": r["id"],
-            "name": r["name"],
-            "muscle_group": r["muscle_group"],
+            "name": display_name(r, lang),
+            "muscle_group": muscle_group_name(r["muscle_group"], lang),
+            "weight_mode": r["weight_mode"],
             "target_sets": r["target_sets"],
             "target_reps": r["target_rep_range"],
             "step": r["step_kg"],
@@ -531,6 +549,11 @@ def get_session_exercise_data(conn, user_id, session_id):
 
 _ADDITIVE_COLUMNS = [
     # (table, column, definition, backfill SQL or None)
+    ("users", "lang", "TEXT NOT NULL DEFAULT 'en'", None),
+    ("splits", "name_ja", "TEXT", None),
+    ("exercises", "name_ja", "TEXT", None),
+    ("exercises", "weight_mode", "TEXT NOT NULL DEFAULT 'added'",
+     "UPDATE exercises SET weight_mode = 'none' WHERE uses_weight = 0"),
     ("sessions", "notes", "TEXT", None),
     ("sessions", "finished_at", "TEXT",
      "UPDATE sessions SET finished_at = date WHERE finished_at IS NULL"),
@@ -667,7 +690,7 @@ def user_stats(conn, user_id):
 
 # ---- editing splits and exercises ----
 
-def update_split(conn, split_id, name):
+def update_split(conn, split_id, name, name_ja=None):
     name = name.strip()
     if not name:
         return "Name can't be empty."
@@ -676,7 +699,8 @@ def update_split(conn, split_id, name):
     ).fetchone()
     if clash:
         return f"There's already a split called {name}."
-    conn.execute("UPDATE splits SET name = ? WHERE id = ?", (name, split_id))
+    conn.execute("UPDATE splits SET name = ?, name_ja = ? WHERE id = ?",
+                 (name, (name_ja or "").strip() or None, split_id))
     conn.commit()
     return None
 
@@ -718,15 +742,20 @@ def update_exercise(conn, exercise_id, **fields):
     ).fetchone()
     if clash:
         return f"That split already has an exercise called {name}."
+    mode = fields.get("weight_mode") or "added"
+    if mode not in ("added", "assisted", "none"):
+        mode = "added"
     conn.execute(
         """
-        UPDATE exercises SET split_id = ?, muscle_group = ?, name = ?, target_sets = ?,
-               target_rep_range = ?, step_kg = ?, uses_weight = ?
+        UPDATE exercises SET split_id = ?, muscle_group = ?, name = ?, name_ja = ?,
+               target_sets = ?, target_rep_range = ?, step_kg = ?,
+               uses_weight = ?, weight_mode = ?
         WHERE id = ?
         """,
         (split_id, (fields.get("muscle_group") or "Other").strip(), name,
+         (fields.get("name_ja") or "").strip() or None,
          fields.get("target_sets"), fields.get("target_rep_range"),
-         fields.get("step_kg"), 1 if fields.get("uses_weight") else 0, exercise_id),
+         fields.get("step_kg"), 0 if mode == "none" else 1, mode, exercise_id),
     )
     conn.commit()
     return None
@@ -864,3 +893,40 @@ def backup_database(dest_path):
         dest.close()
         src.close()
     return dest_path
+
+
+# ---- bilingual display names ----
+
+def _field(row, key):
+    """Read a column that may not be present on this row. sqlite3.Row raises
+    IndexError for an unknown key rather than returning None."""
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def display_name(row, lang="en"):
+    """The Japanese name when there is one and the app is in Japanese, else the
+    English one.
+
+    Accepts any row naming a split or an exercise, whether its columns arrived as
+    `name`/`name_ja` or were aliased by a join to `split_name`/`split_name_ja`.
+    """
+    for ja_key, en_key in (("name_ja", "name"),
+                           ("split_name_ja", "split_name"),
+                           ("exercise_name_ja", "exercise_name")):
+        english = _field(row, en_key)
+        if english is None:
+            continue
+        if lang == "ja":
+            japanese = _field(row, ja_key)
+            if japanese:
+                return japanese
+        return english
+    return ""
+
+
+def set_user_lang(conn, user_id, lang):
+    conn.execute("UPDATE users SET lang = ? WHERE id = ?", (lang, user_id))
+    conn.commit()

@@ -61,10 +61,12 @@
       svg.appendChild(lbl);
     });
 
-    // mark each point that set a new best at the time
-    var best = -Infinity;
+    // Mark each point that was a new best at the time. On an assistance machine
+    // a lower number is the stronger effort, so "best so far" is a minimum.
+    var assisted = window.PROGRESS_ASSISTED === true;
+    var best = assisted ? Infinity : -Infinity;
     var isPr = values.map(function (v) {
-      var pr = v > best;
+      var pr = assisted ? v < best : v > best;
       if (pr) best = v;
       return pr;
     });
@@ -104,7 +106,7 @@
       });
       var hit = el("circle", { cx: x(i), cy: y(p.weight_kg), r: 14, fill: "transparent" });
       function show() {
-        tip.textContent = p.date + "  ·  " + p.weight_kg + "kg" + (isPr[i] ? "  · PB" : "");
+        tip.textContent = p.date + "  ·  " + p.weight_kg + T.kg + (isPr[i] ? "  · " + T.pb : "");
         tip.setAttribute("x", Math.min(Math.max(x(i), 60), W - 60));
         tip.setAttribute("y", Math.max(y(p.weight_kg) - 12, 12));
         tip.setAttribute("opacity", 1);
@@ -121,13 +123,16 @@
     host.appendChild(svg);
   }
 
+  var T = window.I18N || { kg: "kg", pb: "PB", noWeighted: "No weighted sets logged yet." };
+
   document.addEventListener("DOMContentLoaded", function () {
     var host = document.getElementById("progress-chart");
     var series = window.PROGRESS_SERIES || [];
     if (!host || !series.length) return;
     series = series.filter(function (p) { return p.weight_kg !== null; });
     if (!series.length) {
-      host.innerHTML = '<p class="muted">No weighted sets logged for this exercise yet.</p>';
+      host.textContent = T.noWeighted;
+      host.className = "muted";
       return;
     }
     render(host, series);

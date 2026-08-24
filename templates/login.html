@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Sign in — Gym Log{% endblock %}
+{% block title %}{{ t('login.continue') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 <div class="card centered login-card">
-  <h1>Gym Log</h1>
+  <h1>{{ t('app.name') }}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   <form method="post" class="stack">
-    <input type="text" name="name" placeholder="Your name" value="{{ name_value }}"
+    <input type="text" name="name" placeholder="{{ t('login.name') }}" value="{{ name_value }}"
            autocomplete="username" autocapitalize="words" required autofocus>
-    <input type="password" name="password" placeholder="Password"
+    <input type="password" name="password" placeholder="{{ t('login.password') }}"
            autocomplete="current-password">
-    <button type="submit" class="btn primary">Continue</button>
+    <button type="submit" class="btn primary">{{ t('login.continue') }}</button>
   </form>
 
   {% if known_users %}
-    <p class="muted login-hint">Tap a name to fill it in:</p>
+    <p class="muted login-hint">{{ t('login.tap_name') }}</p>
     <div class="name-chips">
       {% for u in known_users %}
         <button type="button" class="name-chip" data-name="{{ u.name }}">{{ u.name }}</button>
       {% endfor %}
     </div>
   {% endif %}
-  <p class="muted login-hint">A name that isn't listed creates a new account.</p>
+  <p class="muted login-hint">{{ t('login.new_account') }}</p>
 </div>
 
 {% endblock %}
@@ -32,8 +32,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".name-chip").forEach(function (b) {
       b.addEventListener("click", function () {
-        var field = document.querySelector('input[name="name"]');
-        field.value = b.dataset.name;
+        document.querySelector('input[name="name"]').value = b.dataset.name;
         document.querySelector('input[name="password"]').focus();
       });
     });

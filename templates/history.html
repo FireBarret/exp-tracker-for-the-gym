@@ -1,73 +1,75 @@
 {% extends "base.html" %}
-{% block title %}History — Gym Log{% endblock %}
+{% block title %}{{ t('history.title') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
-<h1>History <span class="muted">— {{ user_name }}</span></h1>
+<h1>{{ t('history.title') }} <span class="muted">— {{ user_name }}</span></h1>
 
 <form method="get" class="filter-row">
   <select name="split_id" onchange="this.form.submit()">
-    <option value="">All splits</option>
+    <option value="">{{ t('history.all_splits') }}</option>
     {% for s in all_splits %}
-      <option value="{{ s.id }}" {% if selected_split_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+      <option value="{{ s.id }}" {% if selected_split_id == s.id %}selected{% endif %}>{{ dname(s) }}</option>
     {% endfor %}
   </select>
   <select name="exercise_id" onchange="this.form.submit()">
-    <option value="">All exercises</option>
+    <option value="">{{ t('history.all_exercises') }}</option>
     {% for ex in all_exercises %}
-      <option value="{{ ex.id }}" {% if selected_exercise_id == ex.id %}selected{% endif %}>{{ ex.name }}</option>
+      <option value="{{ ex.id }}" {% if selected_exercise_id == ex.id %}selected{% endif %}>{{ dname(ex) }}</option>
     {% endfor %}
   </select>
 </form>
 
-{% if sessions_with_sets %}
-  <div class="data-actions">
+<div class="data-actions">
+  {% if sessions_with_sets %}
     <a class="btn small export-btn"
        href="{{ url_for('export_csv', split_id=selected_split_id or None, exercise_id=selected_exercise_id or None) }}">
-      ⬇ Export CSV{% if selected_split_id or selected_exercise_id %} (filtered){% endif %}
+      {% if selected_split_id or selected_exercise_id %}{{ t('history.export_filtered') }}{% else %}{{ t('history.export_csv') }}{% endif %}
     </a>
-    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
-    <a class="btn small" href="{{ url_for('export_db') }}">⬇ Full backup</a>
-  </div>
-{% else %}
-  <p class="muted">No sessions yet. Go log something — or bring history in from a file.</p>
-  <div class="data-actions">
-    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
-  </div>
+  {% endif %}
+  <a class="btn small" href="{{ url_for('import_csv') }}">{{ t('history.import_csv') }}</a>
+  <a class="btn small" href="{{ url_for('export_db') }}">{{ t('history.full_backup') }}</a>
+</div>
+
+{% if not sessions_with_sets %}
+  <p class="muted">{{ t('history.empty') }}</p>
 {% endif %}
 
 {% for entry in sessions_with_sets %}
   {% set sess = entry.session %}
   <div class="card session-card">
     <div class="session-head">
-      <h3>{{ sess.date }} — {{ sess.split_name }}
-        {% if not sess.finished_at %}<span class="badge-live">in progress</span>{% endif %}
+      <h3>{{ sess.date }} — {{ dname(sess) }}
+        {% if not sess.finished_at %}<span class="badge-live">{{ t('history.in_progress') }}</span>{% endif %}
       </h3>
       {% if not sess.finished_at %}
-        <a class="resume-link" href="{{ url_for('session_log', session_id=sess.id) }}">Resume</a>
+        <a class="resume-link" href="{{ url_for('session_log', session_id=sess.id) }}">{{ t('history.resume') }}</a>
       {% else %}
         <form method="post" action="{{ url_for('resume_session', session_id=sess.id) }}" class="inline-resume">
-          <button type="submit" class="resume-link as-link">Reopen</button>
+          <button type="submit" class="resume-link as-link">{{ t('history.reopen') }}</button>
         </form>
       {% endif %}
-      <a class="edit-link" href="{{ url_for('edit_session', session_id=sess.id) }}">Edit</a>
+      <a class="edit-link" href="{{ url_for('edit_session', session_id=sess.id) }}">{{ t('history.edit') }}</a>
     </div>
     {% if sess.notes %}<p class="notes">{{ sess.notes }}</p>{% endif %}
     {% if entry.sets %}
       <table class="set-table">
-        <thead><tr><th>Exercise</th><th>Set</th><th>Weight</th><th>Reps</th></tr></thead>
+        <thead><tr>
+          <th>{{ t('history.col_exercise') }}</th><th>{{ t('history.col_set') }}</th>
+          <th>{{ t('history.col_weight') }}</th><th>{{ t('history.col_reps') }}</th>
+        </tr></thead>
         <tbody>
           {% for st in entry.sets %}
             <tr>
-              <td>{{ st.exercise_name }}</td>
+              <td>{{ dname(st) }}</td>
               <td>{{ st.set_number }}</td>
-              <td>{% if st.weight_kg is not none %}{{ st.weight_kg | trim_zeros }}kg{% else %}—{% endif %}</td>
+              <td>{% if st.weight_kg is not none %}{{ st.weight_kg | trim_zeros }}{{ t('entry.unit_kg') }}{% else %}—{% endif %}</td>
               <td>{{ st.reps }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     {% else %}
-      <p class="muted">No sets logged.</p>
+      <p class="muted">{{ t('history.no_sets') }}</p>
     {% endif %}
   </div>
 {% endfor %}

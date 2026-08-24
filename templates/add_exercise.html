@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Add exercise — Gym Log{% endblock %}
+{% block title %}{{ t('add.title') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 <div class="entry-head">
-  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back">‹</a>
-  <h1 class="entry-title">Add exercise</h1>
+  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <h1 class="entry-title">{{ t('add.title') }}</h1>
 </div>
 
-<h2 class="muscle-heading">Recommended for {{ split.name }}</h2>
+<h2 class="muscle-heading">{{ t('add.recommended', split=dname(split)) }}</h2>
 {% if recommended %}
   <ul class="plan-list">
     {% for ex in recommended %}
@@ -15,27 +15,27 @@
         <form method="post" action="{{ url_for('add_exercise', session_id=session_row.id) }}" class="plan-add-form">
           <input type="hidden" name="exercise_id" value="{{ ex.id }}">
           <button type="submit" class="plan-main as-button">
-            <span class="plan-name">{{ ex.name }}</span>
-            <span class="plan-target">{{ ex.muscle_group }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}</span>
+            <span class="plan-name">{{ dname(ex) }}</span>
+            <span class="plan-target">{{ muscle(ex.muscle_group) }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}</span>
           </button>
         </form>
       </li>
     {% endfor %}
   </ul>
 {% else %}
-  <p class="muted">Everything from {{ split.name }} is already on the plan.</p>
+  <p class="muted">{{ t('add.all_on_plan', split=dname(split)) }}</p>
 {% endif %}
 
 <details class="disclosure">
-  <summary>··· Other exercises ({{ others | length }})</summary>
+  <summary>{{ t('add.others', n=others | length) }}</summary>
   <ul class="plan-list">
     {% for ex in others %}
       <li class="plan-row">
         <form method="post" action="{{ url_for('add_exercise', session_id=session_row.id) }}" class="plan-add-form">
           <input type="hidden" name="exercise_id" value="{{ ex.id }}">
           <button type="submit" class="plan-main as-button">
-            <span class="plan-name">{{ ex.name }}</span>
-            <span class="plan-target">{{ ex.split_name }} · {{ ex.muscle_group }}</span>
+            <span class="plan-name">{{ dname(ex) }}</span>
+            <span class="plan-target">{{ ex.split_name }} · {{ muscle(ex.muscle_group) }}</span>
           </button>
         </form>
       </li>
@@ -44,23 +44,32 @@
 </details>
 
 <details class="disclosure">
-  <summary>+ Brand new exercise</summary>
+  <summary>{{ t('add.brand_new') }}</summary>
   <form method="post" action="{{ url_for('new_exercise', session_id=session_row.id) }}" class="stack new-ex-form">
-    <input type="text" name="name" placeholder="Exercise name" required>
-    <input type="text" name="muscle_group" placeholder="Muscle group (e.g. Chest)">
+    <input type="text" name="name" placeholder="{{ t('add.name_en') }}" required>
+    <input type="text" name="name_ja" placeholder="{{ t('add.name_ja') }}" lang="ja">
+    <p class="muted field-hint">{{ t('add.name_ja_hint') }}</p>
+    <input type="text" name="muscle_group" placeholder="{{ t('add.muscle') }}">
     <label class="field-row">
-      <span>Split</span>
+      <span>{{ t('add.split') }}</span>
       <select name="split_id">
         {% for s in splits %}
-          <option value="{{ s.id }}" {% if s.id == split.id %}selected{% endif %}>{{ s.name }}</option>
+          <option value="{{ s.id }}" {% if s.id == split.id %}selected{% endif %}>{{ dname(s) }}</option>
         {% endfor %}
       </select>
     </label>
-    <label class="field-row"><span>Target sets</span><input type="number" name="target_sets" value="3" min="1"></label>
-    <label class="field-row"><span>Rep range</span><input type="text" name="target_rep_range" value="8-12"></label>
-    <label class="field-row"><span>Step (kg)</span><input type="number" name="step_kg" value="2.5" step="0.25"></label>
-    <label class="check-row"><input type="checkbox" name="uses_weight" checked> Uses weight</label>
-    <button type="submit" class="btn primary">Create &amp; add</button>
+    <label class="field-row"><span>{{ t('add.target_sets') }}</span><input type="number" name="target_sets" value="3" min="1"></label>
+    <label class="field-row"><span>{{ t('add.rep_range') }}</span><input type="text" name="target_rep_range" value="8-12"></label>
+    <label class="field-row"><span>{{ t('add.step') }}</span><input type="number" name="step_kg" value="2.5" step="0.25"></label>
+    <label class="field-row">
+      <span>{{ t('add.weight_mode') }}</span>
+      <select name="weight_mode">
+        <option value="added">{{ t('weight.added') }}</option>
+        <option value="assisted">{{ t('weight.assisted') }}</option>
+        <option value="none">{{ t('weight.none') }}</option>
+      </select>
+    </label>
+    <button type="submit" class="btn primary">{{ t('add.create') }}</button>
   </form>
 </details>
 

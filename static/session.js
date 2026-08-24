@@ -11,6 +11,7 @@
   var BY_ID = {};
   DATA.forEach(function (ex) { BY_ID[ex.id] = ex; });
 
+  var T = window.I18N || {};
   var STEPS = { weight: [-0.5, 2.5, 5, 10], reps: [-1, 1, 2, 5] };
 
   var planView = document.getElementById("plan-view");
@@ -25,7 +26,8 @@
 
   function describe(entry) {
     if (!entry) return "—";
-    return (entry.weight !== null && entry.weight !== undefined ? fmt(entry.weight) + "kg × " : "") + entry.reps;
+    return (entry.weight !== null && entry.weight !== undefined
+      ? fmt(entry.weight) + T.kg + " × " : "") + entry.reps;
   }
 
   // ---- opening / closing the entry screen ----
@@ -47,8 +49,13 @@
     prevChip.disabled = !current.previous;
     pbChip.disabled = !current.pb;
 
+    // Assistance machines run the other way: less weight is the harder set, so
+    // the field is labelled differently and the screen says so.
+    var assisted = current.weight_mode === "assisted";
     var weightField = $('.hero-field[data-field="weight"]');
     weightField.hidden = !current.uses_weight;
+    $('[data-role="weight-label"]').textContent = assisted ? T.assist : T.weight;
+    $('[data-role="assist-note"]').hidden = !assisted;
 
     // Start from the last set done here, else last workout, else a default.
     var last = current.sets.length ? current.sets[current.sets.length - 1] : null;
@@ -97,8 +104,8 @@
     });
 
     $('[data-role="summary"]').textContent = current.uses_weight
-      ? fmt(state.weight) + "kg × " + state.reps
-      : state.reps + " reps";
+      ? fmt(state.weight) + T.kg + " × " + state.reps
+      : state.reps + " " + T.reps;
   }
 
   function renderSets() {
@@ -114,8 +121,8 @@
       var v = document.createElement("span");
       v.className = "set-val";
       v.textContent = st.weight !== null && st.weight !== undefined
-        ? fmt(st.weight) + "kg × " + st.reps
-        : st.reps + " reps";
+        ? fmt(st.weight) + T.kg + " × " + st.reps
+        : st.reps + " " + T.reps;
 
       var del = document.createElement("button");
       del.type = "button";
@@ -148,7 +155,7 @@
 
   function promptExact(field) {
     var cur = field === "weight" ? fmt(state.weight) : String(state.reps);
-    var input = window.prompt(field === "weight" ? "Weight in kg" : "Reps", cur);
+    var input = window.prompt(field === "weight" ? T.promptWeight : T.promptReps, cur);
     if (input === null) return;
     var n = parseFloat(input);
     if (isNaN(n) || n < 0) return;
@@ -174,7 +181,7 @@
       });
       if (!res.ok) {
         var err = await res.json().catch(function () { return {}; });
-        alert(err.error || "Couldn't save that set — check your connection.");
+        alert(err.error || T.saveFailed);
         return;
       }
       var r = await res.json();
@@ -184,7 +191,7 @@
       btn.classList.add("flash");
       setTimeout(function () { btn.classList.remove("flash"); }, 400);
     } catch (e) {
-      alert("Couldn't save that set — check your connection.");
+      alert(T.saveFailed);
     } finally {
       btn.disabled = false;
     }

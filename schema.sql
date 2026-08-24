@@ -1,11 +1,13 @@
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  lang TEXT NOT NULL DEFAULT 'en'   -- 'en' or 'ja'
 );
 
 CREATE TABLE IF NOT EXISTS splits (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,      -- 'Push', 'Pull', 'Legs', plus any custom ones
+  name_ja TEXT,                   -- optional Japanese name
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_custom INTEGER NOT NULL DEFAULT 0
 );
@@ -15,11 +17,16 @@ CREATE TABLE IF NOT EXISTS exercises (
   split_id INTEGER NOT NULL REFERENCES splits(id),
   muscle_group TEXT NOT NULL,     -- e.g. 'Chest', 'Shoulders', 'Triceps'
   name TEXT NOT NULL,
+  name_ja TEXT,                   -- optional Japanese name
   target_sets INTEGER,
   target_rep_range TEXT,          -- e.g. '8-12'
   step_kg REAL NOT NULL DEFAULT 2.5,
   sort_order INTEGER NOT NULL DEFAULT 0,
   uses_weight INTEGER NOT NULL DEFAULT 1,  -- 0 = bodyweight-only, reps only, no kg shown
+  -- 'added'    : normal loading, more kg is stronger
+  -- 'assisted' : assistance machines, LESS kg is stronger (PBs are minima)
+  -- 'none'     : bodyweight, no weight recorded
+  weight_mode TEXT NOT NULL DEFAULT 'added',
   is_custom INTEGER NOT NULL DEFAULT 0,
   UNIQUE(split_id, name)
 );

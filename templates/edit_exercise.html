@@ -1,52 +1,55 @@
 {% extends "base.html" %}
-{% block title %}{{ exercise.name }} — Gym Log{% endblock %}
+{% block title %}{{ dname(exercise) }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 <div class="entry-head">
-  <a class="back" href="{{ url_for('manage') }}" aria-label="Back">‹</a>
-  <h1 class="entry-title">Edit exercise</h1>
+  <a class="back" href="{{ url_for('manage') }}" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <h1 class="entry-title">{{ t('exedit.title') }}</h1>
 </div>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <form method="post" class="stack edit-exercise-form">
-  <label class="field-row"><span>Name</span>
+  <label class="field-row"><span>{{ t('exedit.name_en') }}</span>
     <input type="text" name="name" value="{{ exercise.name }}" required>
   </label>
-  <label class="field-row"><span>Muscle</span>
+  <label class="field-row"><span>{{ t('exedit.name_ja') }}</span>
+    <input type="text" name="name_ja" value="{{ exercise.name_ja or '' }}" lang="ja">
+  </label>
+  <label class="field-row"><span>{{ t('exedit.muscle') }}</span>
     <input type="text" name="muscle_group" value="{{ exercise.muscle_group }}">
   </label>
-  <label class="field-row"><span>Split</span>
+  <label class="field-row"><span>{{ t('exedit.split') }}</span>
     <select name="split_id">
       {% for sp in splits %}
-        <option value="{{ sp.id }}" {% if sp.id == exercise.split_id %}selected{% endif %}>{{ sp.name }}</option>
+        <option value="{{ sp.id }}" {% if sp.id == exercise.split_id %}selected{% endif %}>{{ dname(sp) }}</option>
       {% endfor %}
     </select>
   </label>
-  <label class="field-row"><span>Sets</span>
+  <label class="field-row"><span>{{ t('exedit.sets') }}</span>
     <input type="number" name="target_sets" value="{{ exercise.target_sets }}" min="1">
   </label>
-  <label class="field-row"><span>Reps</span>
+  <label class="field-row"><span>{{ t('exedit.reps') }}</span>
     <input type="text" name="target_rep_range" value="{{ exercise.target_rep_range }}">
   </label>
-  <label class="field-row"><span>Step (kg)</span>
+  <label class="field-row"><span>{{ t('exedit.step') }}</span>
     <input type="number" name="step_kg" value="{{ exercise.step_kg | trim_zeros }}" step="0.25" min="0">
   </label>
-  <label class="check-row">
-    <input type="checkbox" name="uses_weight" {% if exercise.uses_weight %}checked{% endif %}>
-    Uses weight (uncheck for bodyweight-only)
+  <label class="field-row"><span>{{ t('add.weight_mode') }}</span>
+    <select name="weight_mode">
+      <option value="added" {% if exercise.weight_mode == 'added' %}selected{% endif %}>{{ t('weight.added') }}</option>
+      <option value="assisted" {% if exercise.weight_mode == 'assisted' %}selected{% endif %}>{{ t('weight.assisted') }}</option>
+      <option value="none" {% if exercise.weight_mode == 'none' %}selected{% endif %}>{{ t('weight.none') }}</option>
+    </select>
   </label>
-  <button type="submit" class="btn primary">Save changes</button>
+  <button type="submit" class="btn primary">{{ t('exedit.save') }}</button>
 </form>
 
-<p class="muted manage-meta">
-  {{ usage.sets }} logged set{{ '' if usage.sets == 1 else 's' }} use this exercise.
-  Renaming it keeps them attached, so history and PBs follow the new name.
-</p>
+<p class="muted manage-meta">{{ t('exedit.usage', n=usage.sets) }}</p>
 
 <form method="post" action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}"
-      onsubmit="return confirm('Delete {{ exercise.name }} and its {{ usage.sets }} logged set(s)? This cannot be undone.');">
-  <button type="submit" class="btn danger-btn">Delete exercise</button>
+      onsubmit="return confirm('{{ t('exedit.confirm', name=exercise.name, n=usage.sets) }}');">
+  <button type="submit" class="btn danger-btn">{{ t('exedit.delete') }}</button>
 </form>
 
 {% endblock %}

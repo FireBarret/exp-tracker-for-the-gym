@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>{% block title %}Gym Log{% endblock %}</title>
+  <title>{% block title %}{{ t('app.name') }}{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏋️</text></svg>">
   <link rel="manifest" href="{{ url_for('manifest') }}">
   <meta name="theme-color" content="#0f1115">
@@ -15,28 +15,31 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="{{ url_for('home') }}">🏋️ Gym Log</a>
-    {% if session.get('user_id') %}
-      <nav class="topnav">
+    <a class="brand" href="{{ url_for('home') }}">🏋️ {{ t('app.name') }}</a>
+    <nav class="topnav">
+      {% if session.get('user_id') %}
         <span class="who">{{ session.get('user_name') }}</span>
         {% if active_session %}
           <a class="resume-pill" href="{{ url_for('session_log', session_id=active_session.id) }}">
-            ● Resume {{ active_session.split_name }}
+            ● {{ t('nav.resume', split=dname(active_session)) }}
           </a>
         {% endif %}
-        <a href="{{ url_for('splits') }}">Splits</a>
-        <a href="{{ url_for('history') }}">History</a>
-        <a href="{{ url_for('progress') }}">Progress</a>
-        <a href="{{ url_for('manage') }}">Manage</a>
-        <a href="{{ url_for('logout') }}">Sign out</a>
-      </nav>
-    {% endif %}
+        <a href="{{ url_for('splits') }}">{{ t('nav.splits') }}</a>
+        <a href="{{ url_for('history') }}">{{ t('nav.history') }}</a>
+        <a href="{{ url_for('progress') }}">{{ t('nav.progress') }}</a>
+        <a href="{{ url_for('manage') }}">{{ t('nav.manage') }}</a>
+        <a href="{{ url_for('logout') }}">{{ t('nav.signout') }}</a>
+      {% endif %}
+      <span class="lang-switch">
+        {% for code, label in languages.items() %}
+          <a href="{{ url_for('set_lang', code=code) }}"
+             class="lang-opt{% if code == lang %} on{% endif %}">{{ label }}</a>
+        {% endfor %}
+      </span>
+    </nav>
   </header>
   {% if schema_needs_migration %}
-    <div class="schema-warning">
-      This database still uses the old six-split layout. Run
-      <code>python migrate.py</code> in a Bash console, then reload the web app.
-    </div>
+    <div class="schema-warning">{{ t('schema.warning') }}</div>
   {% endif %}
   <main class="container">
     {% with messages = get_flashed_messages() %}
@@ -47,8 +50,6 @@
     {% block content %}{% endblock %}
   </main>
   <script>
-    // Serves the shell from disk on repeat visits so a slow host is only asked
-    // for the page itself.
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("/sw.js").catch(function () {});

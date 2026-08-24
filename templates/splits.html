@@ -1,44 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Pick a split — Gym Log{% endblock %}
+{% block title %}{{ t('nav.splits') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 {% if resumable %}
   <div class="resume-card">
     <div class="resume-text">
-      <span class="resume-label">Workout in progress</span>
-      <span class="resume-split">{{ resumable.split_name }}</span>
+      <span class="resume-label">{{ t('splits.in_progress') }}</span>
+      <span class="resume-split">{{ dname(resumable) }}</span>
       <span class="resume-meta">
-        {{ resumable.date }} ·
-        {{ resumable.set_count }} set{{ '' if resumable.set_count == 1 else 's' }} logged
+        {{ resumable.date }} · {{ t('splits.sets_logged', n=resumable.set_count) }}
       </span>
     </div>
     <div class="resume-actions">
-      <a class="btn primary" href="{{ url_for('session_log', session_id=resumable.id) }}">Resume</a>
+      <a class="btn primary" href="{{ url_for('session_log', session_id=resumable.id) }}">{{ t('splits.resume') }}</a>
       <form method="post" action="{{ url_for('finish_session', session_id=resumable.id) }}"
-            onsubmit="return confirm('Finish this {{ resumable.split_name }} workout?');">
-        <button type="submit" class="btn small">Finish</button>
+            onsubmit="return confirm('{{ t('splits.confirm_finish', split=dname(resumable)) }}');">
+        <button type="submit" class="btn small">{{ t('splits.finish') }}</button>
       </form>
     </div>
   </div>
-  <p class="muted resume-note">Starting a different split below will finish this one first.</p>
+  <p class="muted resume-note">{{ t('splits.switch_note') }}</p>
 {% endif %}
 
-<h1>Hey {{ user_name }} — what are you training?</h1>
+<h1>{{ t('splits.heading', name=user_name) }}</h1>
 
 <div class="grid">
   {% for split in splits %}
     <form method="post" action="{{ url_for('start_session') }}">
       <input type="hidden" name="split_id" value="{{ split.id }}">
-      <button type="submit" class="btn tile">{{ split.name }}</button>
+      <button type="submit" class="btn tile">{{ dname(split) }}</button>
     </form>
   {% endfor %}
 </div>
 
 <details class="disclosure">
-  <summary>+ New split</summary>
+  <summary>{{ t('splits.new') }}</summary>
   <form method="post" action="{{ url_for('new_split') }}" class="inline-form">
-    <input type="text" name="name" placeholder="e.g. Arms, Full body" required>
-    <button type="submit" class="btn small primary">Create</button>
+    <input type="text" name="name" placeholder="{{ t('splits.new_ph') }}" required>
+    <button type="submit" class="btn small primary">{{ t('splits.create') }}</button>
   </form>
 </details>
 

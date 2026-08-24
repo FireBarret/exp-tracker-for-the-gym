@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ exercise.name }} — Gym Log{% endblock %}
+{% block title %}{{ dname(exercise) }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 <div class="entry-head">
-  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back">‹</a>
-  <h1 class="entry-title">{{ exercise.name }}</h1>
+  <a class="back" href="{{ url_for('session_log', session_id=session_row.id) }}" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <h1 class="entry-title">{{ dname(exercise) }}</h1>
   <span class="entry-target">{{ exercise.target_sets }}×{{ exercise.target_rep_range }}</span>
 </div>
 
@@ -13,35 +13,35 @@
     <button type="button" class="stat-chip" data-role="recall"
             data-weight="{{ previous.weight_kg if previous.weight_kg is not none else '' }}"
             data-reps="{{ previous.reps }}">
-      <span class="stat-label">Previous</span>
-      <span class="stat-value">{% if previous.weight_kg is not none %}{{ previous.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ previous.reps }}</span>
+      <span class="stat-label">{{ t('entry.previous') }}</span>
+      <span class="stat-value">{% if previous.weight_kg is not none %}{{ previous.weight_kg | round(2) | trim_zeros }}{{ t('entry.unit_kg') }} × {% endif %}{{ previous.reps }}</span>
     </button>
   {% else %}
-    <span class="stat-chip empty"><span class="stat-label">Previous</span><span class="stat-value">—</span></span>
+    <span class="stat-chip empty"><span class="stat-label">{{ t('entry.previous') }}</span><span class="stat-value">—</span></span>
   {% endif %}
 
   {% if pb %}
     <button type="button" class="stat-chip pb" data-role="recall"
             data-weight="{{ pb.weight_kg if pb.weight_kg is not none else '' }}"
             data-reps="{{ pb.reps }}">
-      <span class="stat-label">PB</span>
-      <span class="stat-value">{% if pb.weight_kg is not none %}{{ pb.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ pb.reps }}</span>
+      <span class="stat-label">{{ t('entry.pb') }}</span>
+      <span class="stat-value">{% if pb.weight_kg is not none %}{{ pb.weight_kg | round(2) | trim_zeros }}{{ t('entry.unit_kg') }} × {% endif %}{{ pb.reps }}</span>
     </button>
   {% else %}
-    <span class="stat-chip empty"><span class="stat-label">PB</span><span class="stat-value">—</span></span>
+    <span class="stat-chip empty"><span class="stat-label">{{ t('entry.pb') }}</span><span class="stat-value">—</span></span>
   {% endif %}
 </div>
 
 <div class="hero" data-uses-weight="{{ 1 if exercise.uses_weight else 0 }}">
   {% if exercise.uses_weight %}
     <button type="button" class="hero-field active" data-field="weight">
-      <span class="hero-label">Weight</span>
-      <span class="hero-number"><span data-role="weight-display">0</span><span class="hero-unit">kg</span></span>
+      <span class="hero-label">{% if exercise.weight_mode == 'assisted' %}{{ t('entry.assist') }}{% else %}{{ t('entry.weight') }}{% endif %}</span>
+      <span class="hero-number"><span data-role="weight-display">0</span><span class="hero-unit">{{ t('entry.unit_kg') }}</span></span>
     </button>
   {% endif %}
   <button type="button" class="hero-field{% if not exercise.uses_weight %} active{% endif %}" data-field="reps">
-    <span class="hero-label">Reps</span>
-    <span class="hero-number"><span data-role="reps-display">0</span><span class="hero-unit">reps</span></span>
+    <span class="hero-label">{{ t('entry.reps') }}</span>
+    <span class="hero-number"><span data-role="reps-display">0</span><span class="hero-unit">{{ t('entry.unit_reps') }}</span></span>
   </button>
 </div>
 
@@ -49,20 +49,20 @@
 
 <div class="entry-bar">
   <span class="entry-summary" data-role="summary"></span>
-  <button type="button" class="btn primary add-set" data-role="add-set">Add set</button>
+  <button type="button" class="btn primary add-set" data-role="add-set">{{ t('entry.add_set') }}</button>
 </div>
 
-<h2 class="muscle-heading">This session</h2>
+<h2 class="muscle-heading">{{ t('entry.this_session') }}</h2>
 <ul class="set-list" data-role="set-list">
   {% for st in logged %}
     <li data-set-id="{{ st.id }}">
       <span class="set-n">#{{ st.set_number }}</span>
-      <span class="set-val">{% if st.weight_kg is not none %}{{ st.weight_kg | round(2) | trim_zeros }}kg × {% endif %}{{ st.reps }}{% if st.weight_kg is none %} reps{% endif %}</span>
+      <span class="set-val">{% if st.weight_kg is not none %}{{ st.weight_kg | round(2) | trim_zeros }}{{ t('entry.unit_kg') }} × {% endif %}{{ st.reps }}{% if st.weight_kg is none %} {{ t('entry.unit_reps') }}{% endif %}</span>
       <button type="button" class="set-del" data-role="delete-set" data-set-id="{{ st.id }}" aria-label="Delete set">×</button>
     </li>
   {% endfor %}
 </ul>
-<p class="muted empty-note" data-role="empty-note"{% if logged %} hidden{% endif %}>No sets logged yet.</p>
+<p class="muted empty-note" data-role="empty-note"{% if logged %} hidden{% endif %}>{{ t('entry.no_sets') }}</p>
 
 {% endblock %}
 
@@ -71,11 +71,21 @@
   window.ENTRY = {
     exerciseId: {{ exercise.id }},
     usesWeight: {{ 'true' if exercise.uses_weight else 'false' }},
+    weightMode: {{ exercise.weight_mode | tojson }},
     stepKg: {{ exercise.step_kg }},
     startWeight: {{ start_weight }},
     startReps: {{ start_reps }},
     logUrl: "{{ url_for('log_set', session_id=session_row.id) }}",
     deleteUrlBase: "{{ url_for('session_log', session_id=session_row.id) }}/set/"
+  };
+</script>
+<script>
+  window.I18N = {
+    kg: {{ t('entry.unit_kg') | tojson }},
+    reps: {{ t('entry.unit_reps') | tojson }},
+    promptWeight: {{ t('entry.prompt_weight') | tojson }},
+    promptReps: {{ t('entry.prompt_reps') | tojson }},
+    saveFailed: {{ t('entry.save_failed') | tojson }}
   };
 </script>
 <script src="{{ static_url('set_entry.js') }}" defer></script>

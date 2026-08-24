@@ -1,32 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Edit {{ session_row.date }} — Gym Log{% endblock %}
+{% block title %}{{ t('edit.title') }} — {{ t('app.name') }}{% endblock %}
 {% block content %}
 
 <div class="entry-head">
-  <a class="back" href="{{ url_for('history') }}" aria-label="Back">‹</a>
-  <h1 class="entry-title">Edit session</h1>
-  <span class="entry-target">{{ split.name }}</span>
+  <a class="back" href="{{ url_for('history') }}" aria-label="Back"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <h1 class="entry-title">{{ t('edit.title') }}</h1>
+  <span class="entry-target">{{ dname(split) }}</span>
 </div>
 
 <form method="post" class="edit-form">
-  <label class="field-row"><span>Date</span>
+  <label class="field-row"><span>{{ t('edit.date') }}</span>
     <input type="date" name="date" value="{{ session_row.date }}" required>
   </label>
 
-  <label class="field-row top"><span>Notes</span>
-    <textarea name="notes" rows="2" placeholder="abs / cardio / anything else">{{ session_row.notes or '' }}</textarea>
+  <label class="field-row top"><span>{{ t('edit.notes') }}</span>
+    <textarea name="notes" rows="2" placeholder="{{ t('session.notes_ph') }}">{{ session_row.notes or '' }}</textarea>
   </label>
 
-  <h2 class="muscle-heading">Sets</h2>
+  <h2 class="muscle-heading">{{ t('edit.sets') }}</h2>
   {% if sets %}
     <table class="edit-table">
       <thead>
-        <tr><th>Exercise</th><th>#</th><th>kg</th><th>Reps</th><th></th></tr>
+        <tr><th>{{ t('history.col_exercise') }}</th><th>#</th>
+            <th>{{ t('entry.unit_kg') }}</th><th>{{ t('history.col_reps') }}</th><th></th></tr>
       </thead>
       <tbody>
         {% for st in sets %}
           <tr>
-            <td class="ex-cell">{{ st.exercise_name }}</td>
+            <td class="ex-cell">{{ dname(st) }}</td>
             <td class="num-cell">{{ st.set_number }}</td>
             <td>
               <input type="number" step="0.25" min="0" class="edit-num"
@@ -41,25 +42,25 @@
               <button type="submit" class="set-del"
                       formmethod="post" formnovalidate
                       formaction="{{ url_for('delete_set', session_id=session_row.id, set_id=st.id) }}"
-                      onclick="return confirm('Delete this set?');"
-                      aria-label="Delete set">×</button>
+                      onclick="return confirm('{{ t('edit.confirm_set') }}');"
+                      aria-label="×">×</button>
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   {% else %}
-    <p class="muted">No sets logged in this session.</p>
+    <p class="muted">{{ t('edit.no_sets') }}</p>
   {% endif %}
 
   <div class="edit-actions">
-    <button type="submit" class="btn primary">Save changes</button>
+    <button type="submit" class="btn primary">{{ t('edit.save') }}</button>
   </div>
 </form>
 
 <form method="post" action="{{ url_for('delete_session', session_id=session_row.id) }}"
-      onsubmit="return confirm('Delete this whole session and all {{ sets | length }} of its sets? This cannot be undone.');">
-  <button type="submit" class="btn danger-btn">Delete entire session</button>
+      onsubmit="return confirm('{{ t('edit.confirm_session', n=sets | length) }}');">
+  <button type="submit" class="btn danger-btn">{{ t('edit.delete_session') }}</button>
 </form>
 
 {% endblock %}

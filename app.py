@@ -17,6 +17,7 @@ except ImportError:
     pass
 
 import models
+import translations
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -155,6 +156,52 @@ def manifest():
     return resp
 
 
+# ---- language ----
+#
+# Preference lives on the account so each person gets their own, with the session
+# as the store before anyone has signed in (the sign-in page has to be readable
+# too). Falls back to the browser's Accept-Language, then English.
+
+def get_lang():
+    lang = session.get("lang")
+    if lang in translations.LANGUAGES:
+        return lang
+    if session.get("user_id"):
+        db = getattr(g, "db", None)
+        if db is not None:
+            user = models.get_user(db, session["user_id"])
+            if user and user["lang"] in translations.LANGUAGES:
+                return user["lang"]
+    best = request.accept_languages.best_match(list(translations.LANGUAGES)) if request else None
+    return best or translations.DEFAULT_LANG
+
+
+@app.route("/lang/<code>")
+def set_lang(code):
+    if code not in translations.LANGUAGES:
+        abort(404)
+    session["lang"] = code
+    if session.get("user_id"):
+        models.set_user_lang(g.db, session["user_id"], code)
+    return redirect(request.referrer or url_for("home"))
+
+
+@app.context_processor
+def inject_i18n():
+    lang = get_lang()
+
+    def t(key, **kwargs):
+        return translations.translate(key, lang, **kwargs)
+
+    return {
+        "t": t,
+        "lang": lang,
+        "languages": translations.LANGUAGES,
+        "muscle": lambda name: translations.muscle_group(name, lang),
+        "dname": lambda row: models.display_name(row, lang),
+    }
+
+
 @app.context_processor
 def inject_schema_warning():
     return {"schema_needs_migration": SCHEMA_NEEDS_MIGRATION}
@@ -282,8 +329,8 @@ def new_split():
     name = (request.form.get("name") or "").strip()
     if not name:
         return redirect(url_for("splits"))
-    models.create_split(g.db, name)
-    return redirect(url_for("splits"))
+    models.create_split(g.db, name, request.form.get("name_ja"))
+    return redirect(request.referrer or url_for("splits"))
 
 
 @app.route("/session/start", methods=["POST"])
@@ -309,7 +356,8 @@ def session_log(session_id):
     split = models.get_split(g.db, sess["split_id"])
     # One batched fetch: the page ships this to the browser so the set screen
     # opens without another request.
-    exercises = models.get_session_exercise_data(g.db, session["user_id"], session_id)
+    exercises = models.get_session_exercise_data(
+        g.db, session["user_id"], session_id, get_lang())
 
     grouped = {}
     for ex in exercises:
@@ -372,15 +420,19 @@ def new_exercise(session_id):
     if not name or not split_id:
         return redirect(url_for("add_exercise", session_id=session_id))
 
+    mode = request.form.get("weight_mode") or "added"
+    if mode not in ("added", "assisted", "none"):
+        mode = "added"
     exercise_id = models.create_exercise(
         g.db,
         split_id=split_id,
         muscle_group=request.form.get("muscle_group") or "Other",
         name=name,
+        name_ja=request.form.get("name_ja"),
         target_sets=request.form.get("target_sets", type=int) or 3,
         target_rep_range=(request.form.get("target_rep_range") or "8-12").strip(),
         step_kg=request.form.get("step_kg", type=float) or 2.5,
-        uses_weight=request.form.get("uses_weight") == "on",
+        weight_mode=mode,
     )
     models.add_exercise_to_session(g.db, session_id, exercise_id)
     return redirect(url_for("session_log", session_id=session_id))
@@ -678,7 +730,8 @@ def delete_user(user_id):
 def rename_split(split_id):
     if not models.get_split(g.db, split_id):
         abort(404)
-    error = models.update_split(g.db, split_id, request.form.get("name") or "")
+    error = models.update_split(g.db, split_id, request.form.get("name") or "",
+                                request.form.get("name_ja"))
     flash(error or "Split renamed.")
     return redirect(url_for("manage"))
 
@@ -709,10 +762,11 @@ def edit_exercise(exercise_id):
             split_id=request.form.get("split_id", type=int) or exercise["split_id"],
             muscle_group=request.form.get("muscle_group"),
             name=request.form.get("name"),
+            name_ja=request.form.get("name_ja"),
             target_sets=request.form.get("target_sets", type=int) or 3,
             target_rep_range=(request.form.get("target_rep_range") or "8-12").strip(),
             step_kg=request.form.get("step_kg", type=float) or 2.5,
-            uses_weight=request.form.get("uses_weight") == "on",
+            weight_mode=request.form.get("weight_mode"),
         )
         if not error:
             flash("Exercise updated.")
