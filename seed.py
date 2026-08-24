@@ -1,4 +1,4 @@
-"""One-time (idempotent) seed script: populates users, splits, and exercises.
+"""One-time (idempotent) seed script: populates splits and exercises.
 
 Safe to re-run -- every insert is skip-if-exists by unique name.
 Run via `python seed.py` (or via `init_db.py`, which also applies schema.sql first).
@@ -7,8 +7,6 @@ Splits are the three categories: Push, Pull, Legs. Each holds the full pool of
 exercises for that category; a session pre-loads the pool and you prune it.
 """
 from models import get_db
-
-USERS = ["Dariush", "Partner"]
 
 # (muscle_group, name, target_sets, target_rep_range, step_kg, uses_weight)
 SPLITS = [
@@ -64,9 +62,7 @@ SPLITS = [
 
 
 def seed(conn):
-    for name in USERS:
-        conn.execute("INSERT OR IGNORE INTO users (name) VALUES (?)", (name,))
-
+    # No users are seeded: accounts are created by signing in with a new name.
     for split_order, (split_name, exercises) in enumerate(SPLITS):
         conn.execute(
             "INSERT OR IGNORE INTO splits (name, sort_order) VALUES (?, ?)",

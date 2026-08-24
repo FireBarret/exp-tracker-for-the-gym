@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ exercise.name }} — Gym Log{% endblock %}
+{% block content %}
+
+<div class="entry-head">
+  <a class="back" href="{{ url_for('manage') }}" aria-label="Back">‹</a>
+  <h1 class="entry-title">Edit exercise</h1>
+</div>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form method="post" class="stack edit-exercise-form">
+  <label class="field-row"><span>Name</span>
+    <input type="text" name="name" value="{{ exercise.name }}" required>
+  </label>
+  <label class="field-row"><span>Muscle</span>
+    <input type="text" name="muscle_group" value="{{ exercise.muscle_group }}">
+  </label>
+  <label class="field-row"><span>Split</span>
+    <select name="split_id">
+      {% for sp in splits %}
+        <option value="{{ sp.id }}" {% if sp.id == exercise.split_id %}selected{% endif %}>{{ sp.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-row"><span>Sets</span>
+    <input type="number" name="target_sets" value="{{ exercise.target_sets }}" min="1">
+  </label>
+  <label class="field-row"><span>Reps</span>
+    <input type="text" name="target_rep_range" value="{{ exercise.target_rep_range }}">
+  </label>
+  <label class="field-row"><span>Step (kg)</span>
+    <input type="number" name="step_kg" value="{{ exercise.step_kg | trim_zeros }}" step="0.25" min="0">
+  </label>
+  <label class="check-row">
+    <input type="checkbox" name="uses_weight" {% if exercise.uses_weight %}checked{% endif %}>
+    Uses weight (uncheck for bodyweight-only)
+  </label>
+  <button type="submit" class="btn primary">Save changes</button>
+</form>
+
+<p class="muted manage-meta">
+  {{ usage.sets }} logged set{{ '' if usage.sets == 1 else 's' }} use this exercise.
+  Renaming it keeps them attached, so history and PBs follow the new name.
+</p>
+
+<form method="post" action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}"
+      onsubmit="return confirm('Delete {{ exercise.name }} and its {{ usage.sets }} logged set(s)? This cannot be undone.');">
+  <button type="submit" class="btn danger-btn">Delete exercise</button>
+</form>
+
+{% endblock %}

@@ -27,7 +27,8 @@
         <a href="{{ url_for('splits') }}">Splits</a>
         <a href="{{ url_for('history') }}">History</a>
         <a href="{{ url_for('progress') }}">Progress</a>
-        <a href="{{ url_for('home') }}">Switch</a>
+        <a href="{{ url_for('manage') }}">Manage</a>
+        <a href="{{ url_for('logout') }}">Sign out</a>
       </nav>
     {% endif %}
   </header>
@@ -38,6 +39,11 @@
     </div>
   {% endif %}
   <main class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for m in messages %}<p class="flash">{{ m }}</p>{% endfor %}
+      {% endif %}
+    {% endwith %}
     {% block content %}{% endblock %}
   </main>
   <script>

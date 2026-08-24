@@ -2,11 +2,13 @@ import csv
 import hashlib
 import io
 import os
+import tempfile
 from datetime import date
 from functools import wraps
 
-from flask import (Flask, Response, abort, g, jsonify, make_response,
-                   redirect, render_template, request, session, url_for)
+from flask import (Flask, Response, abort, flash, g, get_flashed_messages,
+                   jsonify, make_response, redirect, render_template,
+                   request, session, url_for)
 
 try:
     from dotenv import load_dotenv
@@ -198,7 +200,7 @@ def user_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("user_id"):
-            return redirect(url_for("home"))
+            return redirect(url_for("login"))
         return view(*args, **kwargs)
     return wrapped
 
@@ -213,14 +215,37 @@ def owned_session(session_id):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """Name plus the one shared password. An unrecognised name makes an account.
+
+    The password isn't per-user -- it only exists to keep strangers off the site,
+    so everyone who is meant to be here types the same one.
+    """
     error = None
     if request.method == "POST":
-        # If no password is configured, don't lock the owner out -- treat as open (dev mode).
-        if not APP_PASSWORD or request.form.get("password") == APP_PASSWORD:
+        name = (request.form.get("name") or "").strip()
+        password = request.form.get("password") or ""
+        # With no password configured, don't lock anyone out (local dev).
+        if APP_PASSWORD and password != APP_PASSWORD:
+            error = "Wrong password."
+        elif not name:
+            error = "Enter a name."
+        elif len(name) > 40:
+            error = "That name is too long."
+        else:
+            user, created = models.get_or_create_user(g.db, name)
             session["authed"] = True
-            return redirect(request.args.get("next") or url_for("home"))
-        error = "Wrong password."
-    return render_template("login.html", error=error)
+            session["user_id"] = user["id"]
+            session["user_name"] = user["name"]
+            if created:
+                flash(f"Welcome, {user['name']} — your account is ready.")
+            return redirect(request.args.get("next") or url_for("splits"))
+
+    return render_template(
+        "login.html",
+        error=error,
+        known_users=models.get_users(g.db),
+        name_value=(request.form.get("name") or "") if request.method == "POST" else "",
+    )
 
 
 @app.route("/logout")
@@ -232,20 +257,10 @@ def logout():
 # ---- user + split picking ----
 
 @app.route("/")
-@login_required
 def home():
-    return render_template("home.html", users=models.get_users(g.db))
-
-
-@app.route("/user/<int:user_id>/select")
-@login_required
-def select_user(user_id):
-    user = models.get_user(g.db, user_id)
-    if not user:
-        abort(404)
-    session["user_id"] = user_id
-    session["user_name"] = user["name"]
-    return redirect(url_for("splits"))
+    if session.get("authed") and session.get("user_id"):
+        return redirect(url_for("splits"))
+    return redirect(url_for("login"))
 
 
 @app.route("/splits")
@@ -604,6 +619,190 @@ def export_csv():
         buf.getvalue(),
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---- managing accounts, splits and exercises ----
+
+@app.route("/manage")
+@login_required
+@user_required
+def manage():
+    splits = models.get_splits(g.db)
+    by_split = {sp["id"]: models.get_exercises_for_split(g.db, sp["id"]) for sp in splits}
+    users = models.get_users(g.db)
+    return render_template(
+        "manage.html",
+        splits=splits,
+        by_split=by_split,
+        split_usage={sp["id"]: models.split_usage(g.db, sp["id"]) for sp in splits},
+        users=users,
+        user_stats={u["id"]: models.user_stats(g.db, u["id"]) for u in users},
+        user_name=session.get("user_name"),
+    )
+
+
+@app.route("/manage/user/<int:user_id>/rename", methods=["POST"])
+@login_required
+@user_required
+def rename_user(user_id):
+    if not models.get_user(g.db, user_id):
+        abort(404)
+    error = models.rename_user(g.db, user_id, request.form.get("name") or "")
+    if error:
+        flash(error)
+    else:
+        if user_id == session["user_id"]:
+            session["user_name"] = models.get_user(g.db, user_id)["name"]
+        flash("Name updated.")
+    return redirect(url_for("manage"))
+
+
+@app.route("/manage/user/<int:user_id>/delete", methods=["POST"])
+@login_required
+@user_required
+def delete_user(user_id):
+    if not models.get_user(g.db, user_id):
+        abort(404)
+    models.delete_user(g.db, user_id)
+    if user_id == session["user_id"]:
+        session.clear()
+        return redirect(url_for("login"))
+    flash("Account deleted.")
+    return redirect(url_for("manage"))
+
+
+@app.route("/manage/split/<int:split_id>/rename", methods=["POST"])
+@login_required
+@user_required
+def rename_split(split_id):
+    if not models.get_split(g.db, split_id):
+        abort(404)
+    error = models.update_split(g.db, split_id, request.form.get("name") or "")
+    flash(error or "Split renamed.")
+    return redirect(url_for("manage"))
+
+
+@app.route("/manage/split/<int:split_id>/delete", methods=["POST"])
+@login_required
+@user_required
+def delete_split(split_id):
+    if not models.get_split(g.db, split_id):
+        abort(404)
+    models.delete_split(g.db, split_id)
+    flash("Split deleted.")
+    return redirect(url_for("manage"))
+
+
+@app.route("/manage/exercise/<int:exercise_id>", methods=["GET", "POST"])
+@login_required
+@user_required
+def edit_exercise(exercise_id):
+    exercise = models.get_exercise(g.db, exercise_id)
+    if not exercise:
+        abort(404)
+
+    error = None
+    if request.method == "POST":
+        error = models.update_exercise(
+            g.db, exercise_id,
+            split_id=request.form.get("split_id", type=int) or exercise["split_id"],
+            muscle_group=request.form.get("muscle_group"),
+            name=request.form.get("name"),
+            target_sets=request.form.get("target_sets", type=int) or 3,
+            target_rep_range=(request.form.get("target_rep_range") or "8-12").strip(),
+            step_kg=request.form.get("step_kg", type=float) or 2.5,
+            uses_weight=request.form.get("uses_weight") == "on",
+        )
+        if not error:
+            flash("Exercise updated.")
+            return redirect(url_for("manage"))
+        exercise = models.get_exercise(g.db, exercise_id)
+
+    return render_template(
+        "edit_exercise.html",
+        exercise=exercise,
+        splits=models.get_splits(g.db),
+        usage=models.exercise_usage(g.db, exercise_id),
+        error=error,
+        user_name=session.get("user_name"),
+    )
+
+
+@app.route("/manage/exercise/<int:exercise_id>/delete", methods=["POST"])
+@login_required
+@user_required
+def delete_exercise(exercise_id):
+    if not models.get_exercise(g.db, exercise_id):
+        abort(404)
+    models.delete_exercise(g.db, exercise_id)
+    flash("Exercise deleted.")
+    return redirect(url_for("manage"))
+
+
+# ---- import / backup ----
+
+@app.route("/import", methods=["GET", "POST"])
+@login_required
+@user_required
+def import_csv():
+    """Load a CSV in the same shape the export produces, into this account."""
+    summary = None
+    error = None
+
+    if request.method == "POST":
+        upload = request.files.get("file")
+        if not upload or not upload.filename:
+            error = "Choose a CSV file first."
+        else:
+            try:
+                raw = upload.read().decode("utf-8-sig")
+                reader = csv.DictReader(io.StringIO(raw))
+                missing = {"date", "exercise", "reps"} - set(reader.fieldnames or [])
+                if missing:
+                    error = ("That file is missing required column(s): "
+                             + ", ".join(sorted(missing)))
+                else:
+                    summary = models.import_sets_csv(g.db, session["user_id"], reader)
+            except UnicodeDecodeError:
+                error = "That doesn't look like a text CSV file."
+
+    return render_template(
+        "import.html", summary=summary, error=error, user_name=session.get("user_name")
+    )
+
+
+@app.route("/export.db")
+@login_required
+@user_required
+def export_db():
+    """Download the whole SQLite database -- every account, every set.
+
+    Taken through SQLite's backup API rather than by copying the file, so a
+    write landing mid-download can't produce a torn snapshot. The database is
+    small enough to hold in memory, which lets the temp file go immediately
+    rather than lingering after the response streams.
+    """
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        models.backup_database(path)
+        with open(path, "rb") as f:
+            payload = f.read()
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    filename = f"gym-log-backup-{date.today().isoformat()}.db"
+    return Response(
+        payload,
+        mimetype="application/vnd.sqlite3",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(payload)),
+        },
     )
 
 

@@ -599,3 +599,268 @@ def needs_full_migration(conn):
         return False
     names = {r["name"] for r in conn.execute("SELECT name FROM splits").fetchall()}
     return bool(names & {"Push 1", "Push 2", "Pull 1", "Pull 2", "Legs 1", "Legs 2"})
+
+# ---- accounts ----
+
+def get_user_by_name(conn, name):
+    """Look up an account by name, ignoring case and surrounding whitespace."""
+    return conn.execute(
+        "SELECT * FROM users WHERE name = ? COLLATE NOCASE", (name.strip(),)
+    ).fetchone()
+
+
+def create_user(conn, name):
+    cur = conn.execute("INSERT INTO users (name) VALUES (?)", (name.strip(),))
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_or_create_user(conn, name):
+    """Returns (user_row, created). Signing in with an unused name makes an account."""
+    existing = get_user_by_name(conn, name)
+    if existing:
+        return existing, False
+    user_id = create_user(conn, name)
+    return get_user(conn, user_id), True
+
+
+def rename_user(conn, user_id, new_name):
+    """Returns an error string, or None on success."""
+    new_name = new_name.strip()
+    if not new_name:
+        return "Name can't be empty."
+    clash = conn.execute(
+        "SELECT id FROM users WHERE name = ? COLLATE NOCASE AND id != ?",
+        (new_name, user_id),
+    ).fetchone()
+    if clash:
+        return f"There's already an account called {new_name}."
+    conn.execute("UPDATE users SET name = ? WHERE id = ?", (new_name, user_id))
+    conn.commit()
+    return None
+
+
+def delete_user(conn, user_id):
+    """Remove an account and everything it logged."""
+    session_ids = [
+        r["id"] for r in
+        conn.execute("SELECT id FROM sessions WHERE user_id = ?", (user_id,)).fetchall()
+    ]
+    for sid in session_ids:
+        conn.execute("DELETE FROM sets WHERE session_id = ?", (sid,))
+        conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (sid,))
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+
+
+def user_stats(conn, user_id):
+    return conn.execute(
+        """
+        SELECT (SELECT COUNT(*) FROM sessions WHERE user_id = ?) AS sessions,
+               (SELECT COUNT(*) FROM sets JOIN sessions ON sessions.id = sets.session_id
+                 WHERE sessions.user_id = ?) AS sets
+        """,
+        (user_id, user_id),
+    ).fetchone()
+
+
+# ---- editing splits and exercises ----
+
+def update_split(conn, split_id, name):
+    name = name.strip()
+    if not name:
+        return "Name can't be empty."
+    clash = conn.execute(
+        "SELECT id FROM splits WHERE name = ? COLLATE NOCASE AND id != ?", (name, split_id)
+    ).fetchone()
+    if clash:
+        return f"There's already a split called {name}."
+    conn.execute("UPDATE splits SET name = ? WHERE id = ?", (name, split_id))
+    conn.commit()
+    return None
+
+
+def split_usage(conn, split_id):
+    return conn.execute(
+        """
+        SELECT (SELECT COUNT(*) FROM exercises WHERE split_id = ?) AS exercises,
+               (SELECT COUNT(*) FROM sessions WHERE split_id = ?) AS sessions
+        """,
+        (split_id, split_id),
+    ).fetchone()
+
+
+def delete_split(conn, split_id):
+    """Delete a split, its exercises, and every session logged against it."""
+    for r in conn.execute("SELECT id FROM sessions WHERE split_id = ?", (split_id,)).fetchall():
+        conn.execute("DELETE FROM sets WHERE session_id = ?", (r["id"],))
+        conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (r["id"],))
+    conn.execute("DELETE FROM sessions WHERE split_id = ?", (split_id,))
+    for r in conn.execute("SELECT id FROM exercises WHERE split_id = ?", (split_id,)).fetchall():
+        conn.execute("DELETE FROM sets WHERE exercise_id = ?", (r["id"],))
+        conn.execute("DELETE FROM session_exercises WHERE exercise_id = ?", (r["id"],))
+    conn.execute("DELETE FROM exercises WHERE split_id = ?", (split_id,))
+    conn.execute("DELETE FROM splits WHERE id = ?", (split_id,))
+    conn.commit()
+
+
+def update_exercise(conn, exercise_id, **fields):
+    """Edit an exercise in place. Logged sets keep pointing at it, so a rename or
+    a corrected step size applies to history as well."""
+    name = (fields.get("name") or "").strip()
+    if not name:
+        return "Name can't be empty."
+    split_id = fields.get("split_id")
+    clash = conn.execute(
+        "SELECT id FROM exercises WHERE split_id = ? AND name = ? COLLATE NOCASE AND id != ?",
+        (split_id, name, exercise_id),
+    ).fetchone()
+    if clash:
+        return f"That split already has an exercise called {name}."
+    conn.execute(
+        """
+        UPDATE exercises SET split_id = ?, muscle_group = ?, name = ?, target_sets = ?,
+               target_rep_range = ?, step_kg = ?, uses_weight = ?
+        WHERE id = ?
+        """,
+        (split_id, (fields.get("muscle_group") or "Other").strip(), name,
+         fields.get("target_sets"), fields.get("target_rep_range"),
+         fields.get("step_kg"), 1 if fields.get("uses_weight") else 0, exercise_id),
+    )
+    conn.commit()
+    return None
+
+
+def exercise_usage(conn, exercise_id):
+    return conn.execute(
+        "SELECT COUNT(*) AS sets FROM sets WHERE exercise_id = ?", (exercise_id,)
+    ).fetchone()
+
+
+def delete_exercise(conn, exercise_id):
+    conn.execute("DELETE FROM sets WHERE exercise_id = ?", (exercise_id,))
+    conn.execute("DELETE FROM session_exercises WHERE exercise_id = ?", (exercise_id,))
+    conn.execute("DELETE FROM exercises WHERE id = ?", (exercise_id,))
+    conn.commit()
+
+# ---- CSV import ----
+
+def _unescape_csv(value):
+    """Undo the leading apostrophe the export adds to formula-looking values."""
+    text = (value or "").strip()
+    if text[:2] in ("'=", "'+", "'-", "'@"):
+        return text[1:]
+    return text
+
+
+def import_sets_csv(conn, user_id, rows):
+    """Load rows produced by the CSV export back in, for the given user.
+
+    Splits, exercises and sessions named in the file are created if they don't
+    exist. A set already present for the same date, exercise and set number is
+    skipped, so importing the same file twice doesn't duplicate anything.
+
+    `rows` is an iterable of dicts (csv.DictReader). Returns a summary dict.
+    """
+    added = skipped = 0
+    errors = []
+    split_cache, exercise_cache, session_cache = {}, {}, {}
+
+    for i, row in enumerate(rows, start=2):        # row 1 is the header
+        try:
+            date_str = _unescape_csv(row.get("date"))
+            split_name = _unescape_csv(row.get("split")) or "Imported"
+            ex_name = _unescape_csv(row.get("exercise"))
+            muscle = _unescape_csv(row.get("muscle_group")) or "Other"
+            reps_raw = (row.get("reps") or "").strip()
+            if not date_str or not ex_name or not reps_raw:
+                errors.append(f"row {i}: needs date, exercise and reps")
+                continue
+            reps = int(float(reps_raw))
+            weight_raw = (row.get("weight_kg") or "").strip()
+            weight = float(weight_raw) if weight_raw else None
+            set_number = int(float(row.get("set_number") or 0)) or None
+
+            if split_name not in split_cache:
+                split_cache[split_name] = create_split(conn, split_name)
+            split_id = split_cache[split_name]
+
+            ex_key = (split_id, ex_name)
+            if ex_key not in exercise_cache:
+                found = conn.execute(
+                    "SELECT id FROM exercises WHERE name = ? COLLATE NOCASE", (ex_name,)
+                ).fetchone()
+                exercise_cache[ex_key] = found["id"] if found else create_exercise(
+                    conn, split_id, muscle, ex_name, 3, "8-12", 2.5,
+                    uses_weight=weight is not None,
+                )
+            exercise_id = exercise_cache[ex_key]
+
+            sess_key = (date_str, split_id)
+            if sess_key not in session_cache:
+                found = conn.execute(
+                    "SELECT id FROM sessions WHERE user_id = ? AND date = ? AND split_id = ?",
+                    (user_id, date_str, split_id),
+                ).fetchone()
+                if found:
+                    session_cache[sess_key] = found["id"]
+                else:
+                    cur = conn.execute(
+                        "INSERT INTO sessions (user_id, split_id, date, notes, finished_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (user_id, split_id, date_str,
+                         _unescape_csv(row.get("session_notes")) or None, date_str),
+                    )
+                    session_cache[sess_key] = cur.lastrowid
+            session_id = session_cache[sess_key]
+
+            if set_number is not None:
+                dupe = conn.execute(
+                    "SELECT id FROM sets WHERE session_id = ? AND exercise_id = ? AND set_number = ?",
+                    (session_id, exercise_id, set_number),
+                ).fetchone()
+                if dupe:
+                    skipped += 1
+                    continue
+            else:
+                set_number = conn.execute(
+                    "SELECT COALESCE(MAX(set_number), 0) + 1 AS n FROM sets "
+                    "WHERE session_id = ? AND exercise_id = ?",
+                    (session_id, exercise_id),
+                ).fetchone()["n"]
+
+            conn.execute(
+                "INSERT INTO sets (session_id, exercise_id, set_number, weight_kg, reps) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (session_id, exercise_id, set_number, weight, reps),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO session_exercises (session_id, exercise_id, sort_order) "
+                "VALUES (?, ?, 0)",
+                (session_id, exercise_id),
+            )
+            added += 1
+        except (ValueError, TypeError) as exc:
+            errors.append(f"row {i}: {exc}")
+
+    conn.commit()
+    return {"added": added, "skipped": skipped, "errors": errors}
+
+
+# ---- whole-database backup ----
+
+def backup_database(dest_path):
+    """Write a consistent copy of the database, safe to run while it's in use.
+
+    Uses SQLite's own backup API rather than copying the file, so a write landing
+    mid-copy can't produce a torn snapshot.
+    """
+    src = sqlite3.connect(DB_PATH)
+    dest = sqlite3.connect(dest_path)
+    try:
+        src.backup(dest)
+    finally:
+        dest.close()
+        src.close()
+    return dest_path

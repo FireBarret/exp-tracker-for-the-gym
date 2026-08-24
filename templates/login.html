@@ -1,12 +1,42 @@
 {% extends "base.html" %}
-{% block title %}Log in — Gym Log{% endblock %}
+{% block title %}Sign in — Gym Log{% endblock %}
 {% block content %}
-<div class="card centered">
+
+<div class="card centered login-card">
   <h1>Gym Log</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
   <form method="post" class="stack">
-    <input type="password" name="password" placeholder="Password" autofocus required>
-    <button type="submit" class="btn primary">Enter</button>
+    <input type="text" name="name" placeholder="Your name" value="{{ name_value }}"
+           autocomplete="username" autocapitalize="words" required autofocus>
+    <input type="password" name="password" placeholder="Password"
+           autocomplete="current-password">
+    <button type="submit" class="btn primary">Continue</button>
   </form>
+
+  {% if known_users %}
+    <p class="muted login-hint">Tap a name to fill it in:</p>
+    <div class="name-chips">
+      {% for u in known_users %}
+        <button type="button" class="name-chip" data-name="{{ u.name }}">{{ u.name }}</button>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <p class="muted login-hint">A name that isn't listed creates a new account.</p>
 </div>
+
+{% endblock %}
+
+{% block head %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".name-chip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var field = document.querySelector('input[name="name"]');
+        field.value = b.dataset.name;
+        document.querySelector('input[name="password"]').focus();
+      });
+    });
+  });
+</script>
 {% endblock %}

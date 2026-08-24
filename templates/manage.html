@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Manage — Gym Log{% endblock %}
+{% block content %}
+
+<h1>Manage</h1>
+
+<h2 class="muscle-heading">Accounts</h2>
+{% for u in users %}
+  {% set stats = user_stats[u.id] %}
+  <div class="card manage-card">
+    <form method="post" action="{{ url_for('rename_user', user_id=u.id) }}" class="inline-form">
+      <input type="text" name="name" value="{{ u.name }}" required aria-label="Account name">
+      <button type="submit" class="btn small primary">Save</button>
+    </form>
+    <p class="manage-meta">
+      {{ stats.sessions }} session{{ '' if stats.sessions == 1 else 's' }},
+      {{ stats.sets }} set{{ '' if stats.sets == 1 else 's' }}
+      {% if u.id == session.get('user_id') %}· <b>signed in</b>{% endif %}
+    </p>
+    <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}"
+          onsubmit="return confirm('Delete {{ u.name }} and all {{ stats.sessions }} of their sessions? This cannot be undone.');">
+      <button type="submit" class="link-danger">Delete account</button>
+    </form>
+  </div>
+{% endfor %}
+
+<h2 class="muscle-heading">Splits &amp; exercises</h2>
+{% for sp in splits %}
+  {% set usage = split_usage[sp.id] %}
+  <div class="card manage-card">
+    <form method="post" action="{{ url_for('rename_split', split_id=sp.id) }}" class="inline-form">
+      <input type="text" name="name" value="{{ sp.name }}" required aria-label="Split name">
+      <button type="submit" class="btn small primary">Save</button>
+    </form>
+    <p class="manage-meta">
+      {{ usage.exercises }} exercise{{ '' if usage.exercises == 1 else 's' }},
+      {{ usage.sessions }} session{{ '' if usage.sessions == 1 else 's' }}
+    </p>
+
+    <ul class="plan-list manage-exercises">
+      {% for ex in by_split[sp.id] %}
+        <li class="plan-row">
+          <a class="plan-main" href="{{ url_for('edit_exercise', exercise_id=ex.id) }}">
+            <span class="plan-name">{{ ex.name }}</span>
+            <span class="plan-target">
+              {{ ex.muscle_group }} · {{ ex.target_sets }}×{{ ex.target_rep_range }}
+              · +{{ ex.step_kg | trim_zeros }}kg{% if not ex.uses_weight %} · bodyweight{% endif %}
+            </span>
+          </a>
+          <span class="plan-count">edit ›</span>
+        </li>
+      {% else %}
+        <li class="muted manage-empty">No exercises in this split.</li>
+      {% endfor %}
+    </ul>
+
+    <form method="post" action="{{ url_for('delete_split', split_id=sp.id) }}"
+          onsubmit="return confirm('Delete the {{ sp.name }} split, its {{ usage.exercises }} exercise(s) and {{ usage.sessions }} logged session(s)? This cannot be undone.');">
+      <button type="submit" class="link-danger">Delete split</button>
+    </form>
+  </div>
+{% endfor %}
+
+<details class="disclosure">
+  <summary>+ New split</summary>
+  <form method="post" action="{{ url_for('new_split') }}" class="inline-form">
+    <input type="text" name="name" placeholder="e.g. Arms, Full body" required>
+    <button type="submit" class="btn small primary">Create</button>
+  </form>
+</details>
+
+<h2 class="muscle-heading">Data</h2>
+<div class="card manage-card">
+  <p class="manage-meta">
+    Back up everything, or bring history in from a CSV.
+  </p>
+  <div class="data-actions">
+    <a class="btn small" href="{{ url_for('export_db') }}">⬇ Download full backup (.db)</a>
+    <a class="btn small" href="{{ url_for('history') }}">⬇ Export CSV</a>
+    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
+  </div>
+</div>
+
+{% endblock %}

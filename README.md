@@ -1,6 +1,6 @@
 # Gym Log
 
-Two-user workout logging webapp. Pick **Push / Pull / Legs** → the session loads
+Multi-user workout logging webapp. Pick **Push / Pull / Legs** → the session loads
 that split's exercises → tap one → set the weight and reps with big +/− buttons →
 **Add set**. Plus history and a progress chart per exercise.
 
@@ -9,6 +9,10 @@ vanilla JS + Chart.js (via CDN). No build step.
 
 ## How it works
 
+- **Signing in** is a name plus one shared password. The password is the same for
+  everyone — it exists only to keep strangers off the site, not to separate
+  accounts. Typing a name nobody has used creates an account for it, so a new
+  person just signs in. Existing names show as chips to tap.
 - **Splits** are the three categories: Push, Pull, Legs. Each holds the full pool
   of exercises for that category. You can add your own splits too.
 - **Starting a session** pre-loads that split's whole exercise pool. Prune what
@@ -37,10 +41,24 @@ vanilla JS + Chart.js (via CDN). No build step.
   from data already loaded. Its URL still updates, so refreshing or sharing a
   link works, the browser back button returns to the plan, and with JavaScript
   off the link falls back to a server-rendered page.
+- **Manage** (in the nav) is where you rename or delete accounts, rename or
+  delete splits, and edit any exercise — its name, muscle group, split, target
+  sets and reps, step size, and whether it uses weight at all. Renaming keeps
+  every logged set attached, so history and PBs follow the new name.
 - **Exporting**: the **⬇ Export CSV** button on the History page downloads one
   row per set (date, split, muscle group, exercise, set number, weight, reps,
   notes). It respects whatever split/exercise filter is active, so you can export
   everything or just one lift. You only ever export your own history.
+- **Importing**: **⬆ Import CSV** takes a file in that same shape back in.
+  Splits and exercises named in the file are created if missing, and a set
+  that's already there (same date, exercise and set number) is skipped — so
+  importing twice doesn't duplicate anything. Everything lands in the signed-in
+  account, whatever the file's `user` column says.
+- **Full backup**: **⬇ Download full backup (.db)** hands you the whole SQLite
+  database — every account, every set. It's taken through SQLite's backup API,
+  so it's a consistent snapshot even if someone is logging a set at the time.
+  To restore, replace `gym.db` on the server with the downloaded file (Files tab
+  on PythonAnywhere) and reload the web app.
 
 ## Performance
 
@@ -89,9 +107,8 @@ flask run              # http://127.0.0.1:5000
 `init_db.py` is safe to re-run — the schema uses `CREATE TABLE IF NOT EXISTS`
 and the seed skips anything that already exists by name.
 
-Rename the two seeded users ("Dariush", "Partner") by editing `USERS` in
-`seed.py` before first running `init_db.py`, or afterwards with
-`sqlite3 gym.db "UPDATE users SET name = '...' WHERE id = 1;"`.
+No accounts are seeded — the first person to sign in creates theirs by typing a
+name. Names can be changed later on the **Manage** page.
 
 ## Upgrading an existing database
 

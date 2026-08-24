@@ -20,12 +20,19 @@
 </form>
 
 {% if sessions_with_sets %}
-  <a class="btn small export-btn"
-     href="{{ url_for('export_csv', split_id=selected_split_id or None, exercise_id=selected_exercise_id or None) }}">
-    ⬇ Export CSV{% if selected_split_id or selected_exercise_id %} (filtered){% endif %}
-  </a>
+  <div class="data-actions">
+    <a class="btn small export-btn"
+       href="{{ url_for('export_csv', split_id=selected_split_id or None, exercise_id=selected_exercise_id or None) }}">
+      ⬇ Export CSV{% if selected_split_id or selected_exercise_id %} (filtered){% endif %}
+    </a>
+    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
+    <a class="btn small" href="{{ url_for('export_db') }}">⬇ Full backup</a>
+  </div>
 {% else %}
-  <p class="muted">No sessions yet. Go log something!</p>
+  <p class="muted">No sessions yet. Go log something — or bring history in from a file.</p>
+  <div class="data-actions">
+    <a class="btn small" href="{{ url_for('import_csv') }}">⬆ Import CSV</a>
+  </div>
 {% endif %}
 
 {% for entry in sessions_with_sets %}

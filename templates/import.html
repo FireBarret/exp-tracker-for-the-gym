@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Import CSV — Gym Log{% endblock %}
+{% block content %}
+
+<div class="entry-head">
+  <a class="back" href="{{ url_for('manage') }}" aria-label="Back">‹</a>
+  <h1 class="entry-title">Import CSV</h1>
+</div>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+{% if summary %}
+  <div class="card import-summary">
+    <p><b>{{ summary.added }}</b> set{{ '' if summary.added == 1 else 's' }} imported.</p>
+    {% if summary.skipped %}
+      <p class="muted">{{ summary.skipped }} already present, so skipped.</p>
+    {% endif %}
+    {% if summary.errors %}
+      <p class="error">{{ summary.errors | length }} row(s) couldn't be read:</p>
+      <ul class="import-errors">
+        {% for e in summary.errors[:10] %}<li>{{ e }}</li>{% endfor %}
+        {% if summary.errors | length > 10 %}<li>…and {{ summary.errors | length - 10 }} more</li>{% endif %}
+      </ul>
+    {% endif %}
+    <a class="btn small" href="{{ url_for('history') }}">See history</a>
+  </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="stack">
+  <input type="file" name="file" accept=".csv,text/csv" required>
+  <button type="submit" class="btn primary">Import</button>
+</form>
+
+<div class="card import-help">
+  <h3>What it expects</h3>
+  <p class="muted">
+    The same shape the <b>Export CSV</b> button produces. Required columns are
+    <code>date</code>, <code>exercise</code> and <code>reps</code>;
+    <code>split</code>, <code>muscle_group</code>, <code>set_number</code>,
+    <code>weight_kg</code> and <code>session_notes</code> are used when present.
+  </p>
+  <pre class="import-sample">date,user,split,muscle_group,exercise,set_number,weight_kg,reps,session_notes
+2026-08-20,Dario,Push,Chest,Bench,1,60,8,felt strong
+2026-08-20,Dario,Push,Chest,Bench,2,62.5,6,</pre>
+  <p class="muted">
+    Everything is imported into <b>{{ user_name }}</b>'s history, whatever the
+    <code>user</code> column says. Splits and exercises named in the file are
+    created if they don't exist yet. A set that's already there — same date,
+    exercise and set number — is skipped, so importing the same file twice
+    doesn't duplicate anything. An empty <code>weight_kg</code> means a
+    bodyweight set.
+  </p>
+</div>
+
+{% endblock %}
