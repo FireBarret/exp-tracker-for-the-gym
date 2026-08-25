@@ -591,6 +591,22 @@ def ensure_schema_current(conn):
             if "duplicate column" not in str(exc).lower():
                 raise
 
+    # Japanese names ship with the app but live in the database, so a deploy has
+    # to put them on rows that predate the column -- otherwise the UI translates
+    # and every exercise stays stubbornly English.
+    if _table_exists(conn, "exercises"):
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(exercises)").fetchall()}
+        if "name_ja" in cols and conn.execute(
+            "SELECT 1 FROM exercises WHERE name_ja IS NULL OR name_ja = '' LIMIT 1"
+        ).fetchone():
+            try:
+                from seed import backfill_translations
+                filled = backfill_translations(conn)
+                if filled:
+                    applied.append(f"japanese names ({filled})")
+            except Exception:
+                pass        # a missing seed module must not stop the app booting
+
     if _table_exists(conn, "sessions") and not _table_exists(conn, "session_exercises"):
         conn.executescript(
             """

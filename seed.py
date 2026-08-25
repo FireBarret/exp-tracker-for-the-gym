@@ -95,14 +95,34 @@ def seed(conn):
                 (split_id, muscle, name, name_ja, sets_, reps, step, sort_order,
                  0 if mode == "none" else 1, mode),
             )
-            # Backfill for rows seeded before these columns existed.
-            conn.execute(
-                "UPDATE exercises SET name_ja = ? "
-                "WHERE split_id = ? AND name = ? AND (name_ja IS NULL OR name_ja = '')",
-                (name_ja, split_id, name),
-            )
-
     conn.commit()
+    backfill_translations(conn)
+
+
+def backfill_translations(conn):
+    """Fill in Japanese names on rows that predate the column.
+
+    Only ever UPDATEs blanks -- it never inserts, so an exercise someone chose to
+    delete stays deleted. That makes it safe to run unattended on every start,
+    which is what stops a deploy from leaving the app half-translated.
+    """
+    filled = 0
+    for _, (split_name, split_ja, exercises) in enumerate(SPLITS):
+        cur = conn.execute(
+            "UPDATE splits SET name_ja = ? "
+            "WHERE name = ? AND (name_ja IS NULL OR name_ja = '')",
+            (split_ja, split_name),
+        )
+        filled += cur.rowcount
+        for muscle, name, name_ja, *_rest in exercises:
+            cur = conn.execute(
+                "UPDATE exercises SET name_ja = ? "
+                "WHERE name = ? AND (name_ja IS NULL OR name_ja = '')",
+                (name_ja, name),
+            )
+            filled += cur.rowcount
+    conn.commit()
+    return filled
 
 
 if __name__ == "__main__":

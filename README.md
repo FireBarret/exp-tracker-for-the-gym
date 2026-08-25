@@ -124,7 +124,15 @@ name. Names can be changed later on the **Manage** page.
 Most schema changes apply themselves. On startup the app adds any missing
 columns or tables to `gym.db` (these changes are purely additive, so they can't
 lose data) — a deploy that adds a column no longer takes the site down while you
-remember to run a command.
+remember to run a command. It also fills in the Japanese names for the seeded
+splits and exercises on databases created before those existed. That backfill
+only ever fills blanks: it never inserts, so an exercise you deleted stays
+deleted.
+
+New *seeded* exercises that ship with a later version (the assisted pullups and
+dips, say) are not added automatically for the same reason. Run `python seed.py`
+once if you want them, or just set an exercise you already have to *assisted* on
+the Manage page.
 
 The one exception is the original six-split layout (Push 1 / Push 2 / Legs 1 / …),
 which has to rewrite rows and takes a backup first, so it stays deliberate. If
