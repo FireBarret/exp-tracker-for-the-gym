@@ -295,6 +295,20 @@ h2.muscle-heading {
 .resume-actions { display: flex; gap: 8px; align-items: center; flex: 0 0 auto; }
 .resume-note { font-size: 0.78rem; margin: 0 0 22px; }
 
+/* ---- cardio ---- */
+
+.cardio-card select, .cardio-card input {
+  padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: #10131a; color: var(--text); font-family: inherit; font-size: 0.95rem;
+}
+.cardio-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.cardio-form select { width: 100%; }
+.cardio-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cardio-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; color: var(--muted); }
+.cardio-fields input { width: 100%; text-align: center; }
+.cardio-history-list { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.82rem; }
+.cardio-history-list li { padding: 2px 0; }
+
 .finish-btn {
   width: 100%; margin-top: 20px;
   border-color: rgba(62, 207, 142, 0.5); color: var(--success); font-weight: 700;

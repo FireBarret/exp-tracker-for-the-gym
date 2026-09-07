@@ -412,6 +412,38 @@ def get_set_count_for_exercise(conn, session_id, exercise_id):
     ).fetchone()["n"]
 
 
+# ---- cardio (optional, separate from the lifting exercises on the plan) ----
+
+CARDIO_TYPES = ("inside_run", "outside_run", "elliptical", "cycling")
+
+
+def get_cardio_for_session(conn, session_id):
+    return conn.execute(
+        "SELECT * FROM cardio_entries WHERE session_id = ? ORDER BY id",
+        (session_id,),
+    ).fetchall()
+
+
+def log_cardio(conn, session_id, cardio_type, duration_min=None, distance_km=None, speed_kmh=None):
+    cur = conn.execute(
+        "INSERT INTO cardio_entries (session_id, cardio_type, duration_min, distance_km, speed_kmh) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (session_id, cardio_type, duration_min, distance_km, speed_kmh),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def delete_cardio(conn, cardio_id, session_id):
+    """Remove one logged cardio entry. session_id scopes it to the session that
+    owns it, same as delete_set."""
+    cur = conn.execute(
+        "DELETE FROM cardio_entries WHERE id = ? AND session_id = ?", (cardio_id, session_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 # ---- progress ----
 
 def get_all_exercise_names(conn, user_id):
@@ -458,6 +490,7 @@ def update_session(conn, session_id, date, notes):
 def delete_session(conn, session_id):
     """Delete a whole session and everything hanging off it."""
     conn.execute("DELETE FROM sets WHERE session_id = ?", (session_id,))
+    conn.execute("DELETE FROM cardio_entries WHERE session_id = ?", (session_id,))
     conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (session_id,))
     conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
     conn.commit()
@@ -525,11 +558,14 @@ def get_active_session(conn, user_id, within_days=1):
 
 def finish_session(conn, session_id):
     """Close a workout. An empty one is deleted rather than kept -- a session with
-    no sets is just noise in history. Returns True if it was deleted."""
+    no sets and no cardio is just noise in history. Returns True if it was deleted."""
     count = conn.execute(
         "SELECT COUNT(*) AS n FROM sets WHERE session_id = ?", (session_id,)
     ).fetchone()["n"]
-    if count == 0:
+    cardio_count = conn.execute(
+        "SELECT COUNT(*) AS n FROM cardio_entries WHERE session_id = ?", (session_id,)
+    ).fetchone()["n"]
+    if count == 0 and cardio_count == 0:
         delete_session(conn, session_id)
         return True
     conn.execute(
@@ -717,6 +753,17 @@ def ensure_schema_current(conn):
         conn.commit()
         applied.append("split_exercises")
 
+    if _table_exists(conn, "sessions") and not _table_exists(conn, "cardio_entries"):
+        conn.executescript(
+            "CREATE TABLE IF NOT EXISTS cardio_entries (id INTEGER PRIMARY KEY, "
+            "session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, "
+            "cardio_type TEXT NOT NULL, duration_min REAL, distance_km REAL, "
+            "speed_kmh REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\n"
+            "CREATE INDEX IF NOT EXISTS idx_cardio_entries_session ON cardio_entries(session_id);"
+        )
+        conn.commit()
+        applied.append("cardio_entries")
+
     return applied
 
 
@@ -775,6 +822,7 @@ def delete_user(conn, user_id):
     ]
     for sid in session_ids:
         conn.execute("DELETE FROM sets WHERE session_id = ?", (sid,))
+        conn.execute("DELETE FROM cardio_entries WHERE session_id = ?", (sid,))
         conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (sid,))
     conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -823,6 +871,7 @@ def delete_split(conn, split_id):
     """Delete a split, its exercises, and every session logged against it."""
     for r in conn.execute("SELECT id FROM sessions WHERE split_id = ?", (split_id,)).fetchall():
         conn.execute("DELETE FROM sets WHERE session_id = ?", (r["id"],))
+        conn.execute("DELETE FROM cardio_entries WHERE session_id = ?", (r["id"],))
         conn.execute("DELETE FROM session_exercises WHERE session_id = ?", (r["id"],))
     conn.execute("DELETE FROM sessions WHERE split_id = ?", (split_id,))
     for r in conn.execute("SELECT id FROM exercises WHERE split_id = ?", (split_id,)).fetchall():
@@ -1016,7 +1065,8 @@ def backup_database(dest_path):
     return dest_path
 
 
-_BACKUP_TABLES = ("users", "splits", "exercises", "sessions", "session_exercises", "sets")
+_BACKUP_TABLES = ("users", "splits", "exercises", "sessions", "session_exercises", "sets",
+                  "cardio_entries")
 
 
 def dump_database_sql(conn):
