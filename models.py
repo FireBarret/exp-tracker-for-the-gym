@@ -7,7 +7,14 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent / "gym.db"
 
 
-def get_db():
+def get_db(env=None):
+    """`env` is the Worker's bindings object (request.environ["workers.env"]).
+    Passed -> D1 (production, Cloudflare Workers). Omitted -> local sqlite3
+    file, for `flask run` / the management scripts (init_db.py, migrate.py,
+    seed.py) that still talk to a real gym.db on disk."""
+    if env is not None:
+        from d1_compat import D1Connection
+        return D1Connection(env.DB)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -899,7 +906,8 @@ def backup_database(dest_path):
     """Write a consistent copy of the database, safe to run while it's in use.
 
     Uses SQLite's own backup API rather than copying the file, so a write landing
-    mid-copy can't produce a torn snapshot.
+    mid-copy can't produce a torn snapshot. Local/dev only -- see
+    dump_database_sql() for the Workers/D1 equivalent, which has no file to copy.
     """
     src = sqlite3.connect(DB_PATH)
     dest = sqlite3.connect(dest_path)
@@ -909,6 +917,32 @@ def backup_database(dest_path):
         dest.close()
         src.close()
     return dest_path
+
+
+_BACKUP_TABLES = ("users", "splits", "exercises", "sessions", "session_exercises", "sets")
+
+
+def dump_database_sql(conn):
+    """Plain-SQL export of every row in every table, newest-safe INSERT order
+    (parents before children). D1 has no file to copy the way sqlite3.backup()
+    does, so `/export.db` on Workers ships this instead of a binary .db file --
+    restorable with `sqlite3 new.db < dump.sql` after loading schema.sql first."""
+    lines = ["PRAGMA foreign_keys=OFF;"]
+    for table in _BACKUP_TABLES:
+        rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+        for row in rows:
+            cols = list(row.keys())
+            values = ", ".join(_sql_literal(row[c]) for c in cols)
+            lines.append(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({values});")
+    return "\n".join(lines) + "\n"
+
+
+def _sql_literal(value):
+    if value is None:
+        return "NULL"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 # ---- bilingual display names ----

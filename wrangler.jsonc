@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gym-tracker",
+  "main": "worker.py",
+  "compatibility_date": "2026-09-07",
+  "compatibility_flags": ["python_workers"],
+  "assets": {
+    "directory": "./static/",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gym-tracker",
+      "database_id": "335bc117-6df3-407f-bd79-91ca41633d12"
+    }
+  ]
+}

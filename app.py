@@ -5,10 +5,11 @@ import os
 import tempfile
 from datetime import date
 from functools import wraps
+from pathlib import Path
 
 from flask import (Flask, Response, abort, flash, g, get_flashed_messages,
                    jsonify, make_response, redirect, render_template,
-                   request, session, url_for)
+                   request, send_from_directory, session, url_for)
 
 try:
     from dotenv import load_dotenv
@@ -19,10 +20,24 @@ except ImportError:
 import models
 import translations
 
-app = Flask(__name__)
+# static_folder=None: on Cloudflare Workers there is no local filesystem to
+# serve /static/* from (the directory is uploaded separately as the ASSETS
+# binding), so the "static" endpoint below serves both that and local dev
+# explicitly instead of using Flask's default file-based static handler.
+app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-APP_PASSWORD = os.environ.get("GYM_APP_PASSWORD")
+STATIC_DIR = Path(__file__).parent / "static"
+
+# On Workers, `wrangler secret put` values live on the per-request env binding,
+# not in os.environ -- worker.py copies them in here before each request (see
+# its module docstring). Locally, os.environ (from .env) is the whole story.
+app.config["GYM_APP_PASSWORD"] = os.environ.get("GYM_APP_PASSWORD")
+
+
+def worker_env():
+    """The Worker's bindings (D1, ASSETS, ...), or None outside Cloudflare Workers."""
+    return request.environ.get("workers.env")
 
 
 @app.template_filter("trim_zeros")
@@ -42,11 +57,18 @@ def trim_zeros(value):
 # if it's still outstanding, every page says so instead of throwing a 500.
 
 SCHEMA_NEEDS_MIGRATION = False
+_SCHEMA_CHECKED = False
 
-def _check_schema():
+
+def _check_schema(env):
+    """Bring the schema up to date. Was run once at import time under
+    PythonAnywhere's always-on process; on Workers there's no such thing as
+    "at import" with a live D1 binding (bindings only exist per-request), so
+    this instead runs on the first request each isolate handles -- see
+    open_db() below."""
     global SCHEMA_NEEDS_MIGRATION
     try:
-        conn = models.get_db()
+        conn = models.get_db(env)
         try:
             applied = models.ensure_schema_current(conn)
             if applied:
@@ -58,14 +80,12 @@ def _check_schema():
         # Never let a schema probe stop the app from booting.
         app.logger.exception("Schema check failed")
 
-_check_schema()
-
 
 @app.route("/healthz")
 def healthz():
     """Plain-text status, handy when a deploy misbehaves."""
     try:
-        conn = models.get_db()
+        conn = models.get_db(worker_env())
         counts = {
             t: conn.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]
             for t in ("users", "splits", "exercises", "sessions", "sets")
@@ -79,22 +99,28 @@ def healthz():
 
 # ---- static assets: versioned URLs + long-lived caching ----
 #
-# PythonAnywhere's free tier is slow to answer, so the goal is to make the
-# browser ask it as rarely as possible. Static files are served with a one-year
-# immutable cache and a content-hash in the query string, so a changed file gets
-# a new URL (and is refetched) while an unchanged one is never requested again --
-# not even a 304 revalidation, which still costs a full round trip.
+# Static files are served with a one-year immutable cache and a version marker
+# in the query string, so a changed file gets a new URL (and is refetched)
+# while an unchanged one is never requested again -- not even a 304
+# revalidation, which still costs a full round trip.
+#
+# Locally this hashes the file's actual bytes (as it always has). On Workers
+# there's no local filesystem to hash -- static/ ships as the ASSETS binding,
+# not as files the Python sandbox can open -- so bump ASSET_VERSION by hand
+# whenever a static file changes; every filename shares that one version.
 
+ASSET_VERSION = "1"
 _ASSET_HASHES = {}
 
 
 def asset_hash(filename):
+    if worker_env() is not None:
+        return ASSET_VERSION
     if app.debug:
         _ASSET_HASHES.pop(filename, None)
     if filename not in _ASSET_HASHES:
-        path = os.path.join(app.static_folder, filename)
         try:
-            with open(path, "rb") as f:
+            with open(STATIC_DIR / filename, "rb") as f:
                 _ASSET_HASHES[filename] = hashlib.md5(f.read()).hexdigest()[:10]
         except OSError:
             _ASSET_HASHES[filename] = "0"
@@ -103,8 +129,22 @@ def asset_hash(filename):
 
 @app.template_global("static_url")
 def static_url(filename):
-    """url_for('static', ...) plus a content hash, so caching can be aggressive."""
+    """url_for('static', ...) plus a version marker, so caching can be aggressive."""
     return url_for("static", filename=filename, v=asset_hash(filename))
+
+
+@app.route("/static/<path:filename>")
+def static(filename):
+    """Flask's default static handler reads from local disk, which doesn't
+    exist on Workers -- fetch from the ASSETS binding there instead."""
+    env = worker_env()
+    if env is not None:
+        from pyodide.ffi import run_sync
+        asset_resp = run_sync(env.ASSETS.fetch(request.url))
+        body = run_sync(asset_resp.bytes())
+        return Response(bytes(body), status=asset_resp.status,
+                        headers=dict(asset_resp.headers))
+    return send_from_directory(STATIC_DIR, filename)
 
 
 @app.after_request
@@ -222,7 +262,12 @@ def inject_active_session():
 
 @app.before_request
 def open_db():
-    g.db = models.get_db()
+    global _SCHEMA_CHECKED
+    env = worker_env()
+    if not _SCHEMA_CHECKED:
+        _check_schema(env)
+        _SCHEMA_CHECKED = True
+    g.db = models.get_db(env)
 
 
 @app.teardown_appcontext
@@ -272,7 +317,8 @@ def login():
         name = (request.form.get("name") or "").strip()
         password = request.form.get("password") or ""
         # With no password configured, don't lock anyone out (local dev).
-        if APP_PASSWORD and password != APP_PASSWORD:
+        app_password = app.config.get("GYM_APP_PASSWORD")
+        if app_password and password != app_password:
             error = "Wrong password."
         elif not name:
             error = "Enter a name."
@@ -830,13 +876,25 @@ def import_csv():
 @login_required
 @user_required
 def export_db():
-    """Download the whole SQLite database -- every account, every set.
+    """Download a full backup of every account, every set.
 
-    Taken through SQLite's backup API rather than by copying the file, so a
-    write landing mid-download can't produce a torn snapshot. The database is
-    small enough to hold in memory, which lets the temp file go immediately
-    rather than lingering after the response streams.
+    Locally, a real .db file via SQLite's backup API (a write landing
+    mid-download can't produce a torn snapshot that way). On Workers, D1 has
+    no file to copy, so it's a plain-SQL dump instead -- restorable with
+    `sqlite3 new.db < backup.sql` after loading schema.sql first.
     """
+    if worker_env() is not None:
+        payload = models.dump_database_sql(g.db).encode()
+        filename = f"gym-log-backup-{date.today().isoformat()}.sql"
+        return Response(
+            payload,
+            mimetype="application/sql",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(payload)),
+            },
+        )
+
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
