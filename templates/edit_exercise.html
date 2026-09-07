@@ -17,15 +17,29 @@
     <input type="text" name="name_ja" value="{{ exercise.name_ja or '' }}" lang="ja">
   </label>
   <label class="field-row"><span>{{ t('exedit.muscle') }}</span>
-    <input type="text" name="muscle_group" value="{{ exercise.muscle_group }}">
-  </label>
-  <label class="field-row"><span>{{ t('exedit.split') }}</span>
-    <select name="split_id">
-      {% for sp in splits %}
-        <option value="{{ sp.id }}" {% if sp.id == exercise.split_id %}selected{% endif %}>{{ dname(sp) }}</option>
+    <select name="muscle_group" id="muscle-select" onchange="document.getElementById('muscle-other').hidden = this.value !== '__other__'">
+      {% for mg in muscle_groups %}
+        <option value="{{ mg }}" {% if mg == exercise.muscle_group %}selected{% endif %}>{{ muscle(mg) }}</option>
       {% endfor %}
+      {% if exercise.muscle_group not in muscle_groups %}
+        <option value="{{ exercise.muscle_group }}" selected>{{ muscle(exercise.muscle_group) }}</option>
+      {% endif %}
+      <option value="__other__">{{ t('exedit.muscle_new') }}</option>
     </select>
   </label>
+  <input type="text" id="muscle-other" name="muscle_group_other" class="field-row-indent"
+         placeholder="{{ t('exedit.muscle_new_placeholder') }}" hidden>
+  <fieldset class="field-row top">
+    <span>{{ t('exedit.split') }}</span>
+    <div class="split-picker">
+      {% for sp in splits %}
+        <label class="check-row">
+          <input type="checkbox" name="split_ids" value="{{ sp.id }}" {% if sp.id in exercise_split_ids %}checked{% endif %}>
+          {{ dname(sp) }}
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
   <label class="field-row"><span>{{ t('exedit.sets') }}</span>
     <input type="number" name="target_sets" value="{{ exercise.target_sets }}" min="1">
   </label>

@@ -31,6 +31,17 @@ CREATE TABLE IF NOT EXISTS exercises (
   UNIQUE(split_id, name)
 );
 
+-- Which splits' pools an exercise appears in. Most exercises live in just
+-- their home split (exercises.split_id), but one can be linked into others
+-- too (e.g. a Push exercise reused on a Full Body day) without duplicating
+-- the row -- so its history, PBs, etc. all stay in one place.
+CREATE TABLE IF NOT EXISTS split_exercises (
+  split_id INTEGER NOT NULL REFERENCES splits(id) ON DELETE CASCADE,
+  exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (split_id, exercise_id)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -61,6 +72,7 @@ CREATE TABLE IF NOT EXISTS sets (
 );
 
 CREATE INDEX IF NOT EXISTS idx_exercises_split ON exercises(split_id);
+CREATE INDEX IF NOT EXISTS idx_split_exercises_exercise ON split_exercises(exercise_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sets_session ON sets(session_id);
 CREATE INDEX IF NOT EXISTS idx_sets_exercise ON sets(exercise_id);

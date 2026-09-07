@@ -369,6 +369,15 @@ h2.muscle-heading {
 .edit-exercise-form .field-row input,
 .edit-exercise-form .field-row select { flex: 1 1 auto; }
 .edit-exercise-form .check-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.field-row-indent { margin: -6px 0 0 90px; }
+
+fieldset.field-row {
+  border: none; margin: 0; padding: 0;
+  display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem;
+}
+fieldset.field-row > span { flex: 0 0 80px; color: var(--muted); padding-top: 2px; }
+.split-picker { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; }
+.split-picker .check-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
 
 /* ---- import ---- */
 

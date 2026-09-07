@@ -109,7 +109,7 @@ def healthz():
 # not as files the Python sandbox can open -- so bump ASSET_VERSION by hand
 # whenever a static file changes; every filename shares that one version.
 
-ASSET_VERSION = "1"
+ASSET_VERSION = "2"
 _ASSET_HASHES = {}
 
 
@@ -440,6 +440,7 @@ def add_exercise(session_id):
         recommended=recommended,
         others=others,
         splits=models.get_splits(g.db),
+        muscle_groups=models.get_muscle_groups(g.db),
         user_name=session.get("user_name"),
     )
 
@@ -462,8 +463,8 @@ def new_exercise(session_id):
     """Create a brand new exercise type and drop it straight onto this session."""
     owned_session(session_id)
     name = (request.form.get("name") or "").strip()
-    split_id = request.form.get("split_id", type=int)
-    if not name or not split_id:
+    split_ids = request.form.getlist("split_ids", type=int)
+    if not name or not split_ids:
         return redirect(url_for("add_exercise", session_id=session_id))
 
     mode = request.form.get("weight_mode") or "added"
@@ -471,8 +472,8 @@ def new_exercise(session_id):
         mode = "added"
     exercise_id = models.create_exercise(
         g.db,
-        split_id=split_id,
-        muscle_group=request.form.get("muscle_group") or "Other",
+        split_id=split_ids[0],
+        muscle_group=request.form.get("muscle_group_other") or request.form.get("muscle_group") or "Other",
         name=name,
         name_ja=request.form.get("name_ja"),
         target_sets=request.form.get("target_sets", type=int) or 3,
@@ -480,6 +481,8 @@ def new_exercise(session_id):
         step_kg=request.form.get("step_kg", type=float) or 2.5,
         weight_mode=mode,
     )
+    if len(split_ids) > 1:
+        models.set_exercise_splits(g.db, exercise_id, split_ids)
     models.add_exercise_to_session(g.db, session_id, exercise_id)
     return redirect(url_for("session_log", session_id=session_id))
 
@@ -805,8 +808,8 @@ def edit_exercise(exercise_id):
     if request.method == "POST":
         error = models.update_exercise(
             g.db, exercise_id,
-            split_id=request.form.get("split_id", type=int) or exercise["split_id"],
-            muscle_group=request.form.get("muscle_group"),
+            split_ids=request.form.getlist("split_ids", type=int),
+            muscle_group=request.form.get("muscle_group_other") or request.form.get("muscle_group"),
             name=request.form.get("name"),
             name_ja=request.form.get("name_ja"),
             target_sets=request.form.get("target_sets", type=int) or 3,
@@ -819,10 +822,13 @@ def edit_exercise(exercise_id):
             return redirect(url_for("manage"))
         exercise = models.get_exercise(g.db, exercise_id)
 
+    exercise_split_ids = {sp["id"] for sp in models.get_splits_for_exercise(g.db, exercise_id)}
     return render_template(
         "edit_exercise.html",
         exercise=exercise,
         splits=models.get_splits(g.db),
+        exercise_split_ids=exercise_split_ids,
+        muscle_groups=models.get_muscle_groups(g.db),
         usage=models.exercise_usage(g.db, exercise_id),
         error=error,
         user_name=session.get("user_name"),

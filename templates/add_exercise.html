@@ -49,15 +49,27 @@
     <input type="text" name="name" placeholder="{{ t('add.name_en') }}" required>
     <input type="text" name="name_ja" placeholder="{{ t('add.name_ja') }}" lang="ja">
     <p class="muted field-hint">{{ t('add.name_ja_hint') }}</p>
-    <input type="text" name="muscle_group" placeholder="{{ t('add.muscle') }}">
-    <label class="field-row">
-      <span>{{ t('add.split') }}</span>
-      <select name="split_id">
-        {% for s in splits %}
-          <option value="{{ s.id }}" {% if s.id == split.id %}selected{% endif %}>{{ dname(s) }}</option>
+    <label class="field-row"><span>{{ t('add.muscle') }}</span>
+      <select name="muscle_group" id="new-muscle-select" onchange="document.getElementById('new-muscle-other').hidden = this.value !== '__other__'">
+        {% for mg in muscle_groups %}
+          <option value="{{ mg }}">{{ muscle(mg) }}</option>
         {% endfor %}
+        <option value="__other__">{{ t('exedit.muscle_new') }}</option>
       </select>
     </label>
+    <input type="text" id="new-muscle-other" name="muscle_group_other"
+           placeholder="{{ t('exedit.muscle_new_placeholder') }}" hidden>
+    <fieldset class="field-row top">
+      <span>{{ t('add.split') }}</span>
+      <div class="split-picker">
+        {% for s in splits %}
+          <label class="check-row">
+            <input type="checkbox" name="split_ids" value="{{ s.id }}" {% if s.id == split.id %}checked{% endif %}>
+            {{ dname(s) }}
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
     <label class="field-row"><span>{{ t('add.target_sets') }}</span><input type="number" name="target_sets" value="3" min="1"></label>
     <label class="field-row"><span>{{ t('add.rep_range') }}</span><input type="text" name="target_rep_range" value="8-12"></label>
     <label class="field-row"><span>{{ t('add.step') }}</span><input type="number" name="step_kg" value="2.5" step="0.25"></label>

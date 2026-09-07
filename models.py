@@ -68,10 +68,65 @@ def create_split(conn, name, name_ja=None):
 # ---- exercises ----
 
 def get_exercises_for_split(conn, split_id):
+    """Every exercise whose pool includes this split -- its home split plus
+    any it's been linked into via the Manage screen."""
     return conn.execute(
-        "SELECT * FROM exercises WHERE split_id = ? ORDER BY sort_order, id",
+        """
+        SELECT exercises.*
+        FROM exercises
+        JOIN split_exercises ON split_exercises.exercise_id = exercises.id
+        WHERE split_exercises.split_id = ?
+        ORDER BY split_exercises.sort_order, exercises.id
+        """,
         (split_id,),
     ).fetchall()
+
+
+def get_splits_for_exercise(conn, exercise_id):
+    """Every split whose pool includes this exercise, most recently/primarily
+    its home split first."""
+    return conn.execute(
+        """
+        SELECT splits.*
+        FROM splits
+        JOIN split_exercises ON split_exercises.split_id = splits.id
+        WHERE split_exercises.exercise_id = ?
+        ORDER BY splits.sort_order
+        """,
+        (exercise_id,),
+    ).fetchall()
+
+
+def set_exercise_splits(conn, exercise_id, split_ids):
+    """Replace which splits' pools this exercise belongs to.
+
+    Doesn't touch exercises.split_id (its "home" split, used only as the
+    UNIQUE(split_id, name) scope and as a sane default) -- callers that want
+    to change that update it themselves.
+    """
+    split_ids = list(dict.fromkeys(int(s) for s in split_ids))   # de-dup, keep order
+    conn.execute("DELETE FROM split_exercises WHERE exercise_id = ?", (exercise_id,))
+    for order, split_id in enumerate(split_ids):
+        conn.execute(
+            "INSERT OR IGNORE INTO split_exercises (split_id, exercise_id, sort_order) "
+            "VALUES (?, ?, ?)",
+            (split_id, exercise_id, order),
+        )
+    conn.commit()
+
+
+def get_muscle_groups(conn):
+    """Distinct muscle groups already in use, for the picker dropdown."""
+    groups = [
+        r["muscle_group"] for r in conn.execute(
+            "SELECT DISTINCT muscle_group FROM exercises "
+            "WHERE muscle_group IS NOT NULL AND muscle_group != '' "
+            "ORDER BY muscle_group COLLATE NOCASE"
+        ).fetchall()
+    ]
+    if "Other" not in groups:
+        groups.append("Other")
+    return groups
 
 
 def get_exercise(conn, exercise_id):
@@ -116,8 +171,14 @@ def create_exercise(conn, split_id, muscle_group, name, target_sets,
          target_sets, target_rep_range, step_kg, next_order,
          1 if uses_weight else 0, weight_mode),
     )
+    exercise_id = cur.lastrowid
+    conn.execute(
+        "INSERT OR IGNORE INTO split_exercises (split_id, exercise_id, sort_order) "
+        "VALUES (?, ?, ?)",
+        (split_id, exercise_id, next_order),
+    )
     conn.commit()
-    return cur.lastrowid
+    return exercise_id
 
 
 # ---- per-user stats (shared exercise catalogue, separate histories) ----
@@ -272,11 +333,17 @@ def get_addable_exercises(conn, session_id, split_id):
             "SELECT exercise_id FROM session_exercises WHERE session_id = ?", (session_id,)
         ).fetchall()
     }
+    pool = {
+        r["exercise_id"]
+        for r in conn.execute(
+            "SELECT exercise_id FROM split_exercises WHERE split_id = ?", (split_id,)
+        ).fetchall()
+    }
     recommended, others = [], []
     for ex in get_all_exercises(conn):
         if ex["id"] in on_plan:
             continue
-        (recommended if ex["split_id"] == split_id else others).append(ex)
+        (recommended if ex["id"] in pool else others).append(ex)
     return recommended, others
 
 
@@ -615,18 +682,14 @@ def ensure_schema_current(conn):
                 pass        # a missing seed module must not stop the app booting
 
     if _table_exists(conn, "sessions") and not _table_exists(conn, "session_exercises"):
+        # D1's exec() splits statements on literal newlines, not semicolons --
+        # each one has to be on its own line, so no pretty multi-line DDL here.
         conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS session_exercises (
-              id INTEGER PRIMARY KEY,
-              session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-              exercise_id INTEGER NOT NULL REFERENCES exercises(id),
-              sort_order INTEGER NOT NULL DEFAULT 0,
-              UNIQUE(session_id, exercise_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_session_exercises_session
-              ON session_exercises(session_id);
-            """
+            "CREATE TABLE IF NOT EXISTS session_exercises (id INTEGER PRIMARY KEY, "
+            "session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, "
+            "exercise_id INTEGER NOT NULL REFERENCES exercises(id), "
+            "sort_order INTEGER NOT NULL DEFAULT 0, UNIQUE(session_id, exercise_id));\n"
+            "CREATE INDEX IF NOT EXISTS idx_session_exercises_session ON session_exercises(session_id);"
         )
         # Give past sessions a plan built from whatever they actually logged.
         conn.execute(
@@ -635,6 +698,24 @@ def ensure_schema_current(conn):
         )
         conn.commit()
         applied.append("session_exercises")
+
+    if _table_exists(conn, "exercises") and not _table_exists(conn, "split_exercises"):
+        conn.executescript(
+            "CREATE TABLE IF NOT EXISTS split_exercises (split_id INTEGER NOT NULL "
+            "REFERENCES splits(id) ON DELETE CASCADE, exercise_id INTEGER NOT NULL "
+            "REFERENCES exercises(id) ON DELETE CASCADE, sort_order INTEGER NOT NULL "
+            "DEFAULT 0, PRIMARY KEY (split_id, exercise_id));\n"
+            "CREATE INDEX IF NOT EXISTS idx_split_exercises_exercise ON split_exercises(exercise_id);"
+        )
+        # Every exercise starts out linked to just its home split -- nothing
+        # changes visually until you link one into a second split from the
+        # Manage screen.
+        conn.execute(
+            "INSERT OR IGNORE INTO split_exercises (split_id, exercise_id, sort_order) "
+            "SELECT split_id, id, sort_order FROM exercises"
+        )
+        conn.commit()
+        applied.append("split_exercises")
 
     return applied
 
@@ -747,21 +828,35 @@ def delete_split(conn, split_id):
     for r in conn.execute("SELECT id FROM exercises WHERE split_id = ?", (split_id,)).fetchall():
         conn.execute("DELETE FROM sets WHERE exercise_id = ?", (r["id"],))
         conn.execute("DELETE FROM session_exercises WHERE exercise_id = ?", (r["id"],))
+        conn.execute("DELETE FROM split_exercises WHERE exercise_id = ?", (r["id"],))
     conn.execute("DELETE FROM exercises WHERE split_id = ?", (split_id,))
+    # Also drop this split from the pool of any exercise homed elsewhere.
+    conn.execute("DELETE FROM split_exercises WHERE split_id = ?", (split_id,))
     conn.execute("DELETE FROM splits WHERE id = ?", (split_id,))
     conn.commit()
 
 
 def update_exercise(conn, exercise_id, **fields):
     """Edit an exercise in place. Logged sets keep pointing at it, so a rename or
-    a corrected step size applies to history as well."""
+    a corrected step size applies to history as well.
+
+    `split_ids` (which splits' pools this exercise appears in) must be
+    non-empty; the first one becomes its new home split (exercises.split_id)
+    if the old home isn't among them any more.
+    """
     name = (fields.get("name") or "").strip()
     if not name:
         return "Name can't be empty."
-    split_id = fields.get("split_id")
+    split_ids = [int(s) for s in (fields.get("split_ids") or [])]
+    if not split_ids:
+        return "Pick at least one split."
+    current = conn.execute(
+        "SELECT split_id FROM exercises WHERE id = ?", (exercise_id,)
+    ).fetchone()
+    home_split_id = current["split_id"] if current and current["split_id"] in split_ids else split_ids[0]
     clash = conn.execute(
         "SELECT id FROM exercises WHERE split_id = ? AND name = ? COLLATE NOCASE AND id != ?",
-        (split_id, name, exercise_id),
+        (home_split_id, name, exercise_id),
     ).fetchone()
     if clash:
         return f"That split already has an exercise called {name}."
@@ -775,12 +870,13 @@ def update_exercise(conn, exercise_id, **fields):
                uses_weight = ?, weight_mode = ?
         WHERE id = ?
         """,
-        (split_id, (fields.get("muscle_group") or "Other").strip(), name,
+        (home_split_id, (fields.get("muscle_group") or "Other").strip(), name,
          (fields.get("name_ja") or "").strip() or None,
          fields.get("target_sets"), fields.get("target_rep_range"),
          fields.get("step_kg"), 0 if mode == "none" else 1, mode, exercise_id),
     )
     conn.commit()
+    set_exercise_splits(conn, exercise_id, split_ids)
     return None
 
 
@@ -793,6 +889,7 @@ def exercise_usage(conn, exercise_id):
 def delete_exercise(conn, exercise_id):
     conn.execute("DELETE FROM sets WHERE exercise_id = ?", (exercise_id,))
     conn.execute("DELETE FROM session_exercises WHERE exercise_id = ?", (exercise_id,))
+    conn.execute("DELETE FROM split_exercises WHERE exercise_id = ?", (exercise_id,))
     conn.execute("DELETE FROM exercises WHERE id = ?", (exercise_id,))
     conn.commit()
 
