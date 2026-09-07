@@ -4,11 +4,18 @@
   "main": "worker.py",
   "compatibility_date": "2026-09-07",
   "compatibility_flags": ["python_workers"],
+  "workers_dev": true,
   "assets": {
-    "directory": "./static/",
+    "directory": "./public/",
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  "routes": [
+    {
+      "pattern": "gym.dariushshaban.com",
+      "custom_domain": true
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,6 +1,9 @@
 gym.db
 .env
+.dev.vars
 __pycache__/
 *.pyc
 venv/
 .venv/
+.venv-workers/
+.wrangler/
