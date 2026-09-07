@@ -1,0 +1,27 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Python deps (flask, jinja2, markupsafe, workers-runtime-sdk, ...) are
+      # vendored into python_modules/ and committed to the repo -- see that
+      # directory's origin story in the port commit message. `pywrangler`
+      # can't be used for this yet (its pylock-based installer currently
+      # rejects the pyodide-built markupsafe wheel), so this deploys with
+      # plain `wrangler deploy`, same as the manual deploy that's live now.
+      - name: Deploy
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

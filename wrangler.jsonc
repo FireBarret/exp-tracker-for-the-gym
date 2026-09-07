@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gym-tracker",
   "main": "worker.py",
+  "account_id": "1de4a616109adadae2537a0c24db384c",
   "compatibility_date": "2026-09-07",
   "compatibility_flags": ["python_workers"],
   "workers_dev": true,
