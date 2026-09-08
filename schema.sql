@@ -71,9 +71,23 @@ CREATE TABLE IF NOT EXISTS sets (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Optional cardio, logged separately from the lifting exercises on a session's
+-- plan. Every numeric field is optional -- someone might only note the time,
+-- or only the distance -- so nothing here is NOT NULL besides the type.
+CREATE TABLE IF NOT EXISTS cardio_entries (
+  id INTEGER PRIMARY KEY,
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  cardio_type TEXT NOT NULL,      -- 'inside_run', 'outside_run', 'elliptical', 'cycling'
+  duration_min REAL,
+  distance_km REAL,
+  speed_kmh REAL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_exercises_split ON exercises(split_id);
 CREATE INDEX IF NOT EXISTS idx_split_exercises_exercise ON split_exercises(exercise_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sets_session ON sets(session_id);
 CREATE INDEX IF NOT EXISTS idx_sets_exercise ON sets(exercise_id);
 CREATE INDEX IF NOT EXISTS idx_session_exercises_session ON session_exercises(session_id);
+CREATE INDEX IF NOT EXISTS idx_cardio_entries_session ON cardio_entries(session_id);

@@ -211,6 +211,101 @@
     } catch (e) { /* leave the row alone if the delete didn't land */ }
   }
 
+  // ---- cardio (optional, separate from the lifting exercises) ----
+
+  function cardioLabel(entry) {
+    var parts = [T.cardioTypes && T.cardioTypes[entry.cardio_type] || entry.cardio_type];
+    if (entry.duration_min !== null && entry.duration_min !== undefined) {
+      parts.push(fmt(entry.duration_min) + " " + T.min);
+    }
+    if (entry.distance_km !== null && entry.distance_km !== undefined) {
+      parts.push(fmt(entry.distance_km) + " " + T.km);
+    }
+    if (entry.speed_kmh !== null && entry.speed_kmh !== undefined) {
+      parts.push(fmt(entry.speed_kmh) + " " + T.kmh);
+    }
+    return parts.join(" · ");
+  }
+
+  function cardioRow(entry) {
+    var li = document.createElement("li");
+    li.dataset.cardioId = entry.id;
+
+    var v = document.createElement("span");
+    v.className = "set-val";
+    v.textContent = cardioLabel(entry);
+
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "set-del";
+    del.textContent = "×";
+    del.addEventListener("click", function () { deleteCardio(entry.id, li); });
+
+    li.appendChild(v); li.appendChild(del);
+    return li;
+  }
+
+  function numOrNull(el) {
+    var v = el.value.trim();
+    return v === "" ? null : parseFloat(v);
+  }
+
+  async function addCardio() {
+    var typeEl = $("#cardio-type");
+    var type = typeEl.value;
+    if (!type) { alert(T.pickCardioType); return; }
+
+    var durationEl = $("#cardio-duration");
+    var distanceEl = $("#cardio-distance");
+    var speedEl = $("#cardio-speed");
+    var entry = {
+      cardio_type: type,
+      duration_min: numOrNull(durationEl),
+      distance_km: numOrNull(distanceEl),
+      speed_kmh: numOrNull(speedEl),
+    };
+
+    var btn = $("#cardio-add");
+    btn.disabled = true;
+    try {
+      var res = await fetch(S.cardioUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function () { return {}; });
+        alert(err.error || T.saveFailed);
+        return;
+      }
+      var r = await res.json();
+      entry.id = r.id;
+      $("#cardio-list").appendChild(cardioRow(entry));
+      $("#cardio-empty").hidden = true;
+      typeEl.value = "";
+      durationEl.value = "";
+      distanceEl.value = "";
+      speedEl.value = "";
+    } catch (e) {
+      alert(T.saveFailed);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function deleteCardio(cardioId, li) {
+    try {
+      var res = await fetch(S.cardioDeleteBase + cardioId + "/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) return;
+      li.remove();
+      if (!$('#cardio-list').children.length) $("#cardio-empty").hidden = false;
+    } catch (e) { /* leave the row alone if the delete didn't land */ }
+  }
+
   // ---- wiring ----
 
   function init() {
@@ -245,6 +340,14 @@
     });
 
     $('[data-role="add-set"]').addEventListener("click", addSet);
+
+    var cardioAddBtn = document.getElementById("cardio-add");
+    if (cardioAddBtn) cardioAddBtn.addEventListener("click", addCardio);
+    $all('[data-role="delete-cardio"]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        deleteCardio(btn.dataset.cardioId, btn.closest("li"));
+      });
+    });
 
     // Browser back closes the entry screen instead of leaving the page.
     window.addEventListener("popstate", function (e) {

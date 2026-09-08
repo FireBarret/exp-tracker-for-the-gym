@@ -35,6 +35,39 @@
 
   <a class="btn add-btn" href="{{ url_for('add_exercise', session_id=session_row.id) }}">{{ t('session.add') }}</a>
 
+  <div class="card cardio-card">
+    <h3>{{ t('session.cardio') }} <span class="muted">({{ t('session.cardio_hint') }})</span></h3>
+    <div class="cardio-form">
+      <select id="cardio-type">
+        <option value="">{{ t('cardio.type_ph') }}</option>
+        {% for ct in cardio_types %}
+          <option value="{{ ct }}">{{ t('cardio.' + ct) }}</option>
+        {% endfor %}
+      </select>
+      <div class="cardio-fields">
+        <label><span>{{ t('cardio.duration') }}</span>
+          <input type="number" id="cardio-duration" min="0" step="0.5" inputmode="decimal">
+        </label>
+        <label><span>{{ t('cardio.distance') }}</span>
+          <input type="number" id="cardio-distance" min="0" step="0.1" inputmode="decimal">
+        </label>
+        <label><span>{{ t('cardio.speed') }}</span>
+          <input type="number" id="cardio-speed" min="0" step="0.1" inputmode="decimal">
+        </label>
+      </div>
+      <button type="button" id="cardio-add" class="btn small">{{ t('cardio.add') }}</button>
+    </div>
+    <ul class="set-list" id="cardio-list">
+      {% for c in cardio_entries %}
+        <li data-cardio-id="{{ c.id }}">
+          <span class="set-val">{{ t('cardio.' + c.cardio_type) }}{% if c.duration_min is not none %} · {{ c.duration_min | trim_zeros }} {{ t('cardio.min_unit') }}{% endif %}{% if c.distance_km is not none %} · {{ c.distance_km | trim_zeros }} {{ t('cardio.km_unit') }}{% endif %}{% if c.speed_kmh is not none %} · {{ c.speed_kmh | trim_zeros }} {{ t('cardio.kmh_unit') }}{% endif %}</span>
+          <button type="button" class="set-del" data-role="delete-cardio" data-cardio-id="{{ c.id }}" aria-label="×">×</button>
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="muted empty-note" id="cardio-empty"{% if cardio_entries %} hidden{% endif %}>{{ t('cardio.no_entries') }}</p>
+  </div>
+
   {% if session_row.finished_at %}
     <p class="muted finished-note">{{ t('session.finished_on', when=session_row.finished_at[:16] | replace('T', ' ')) }}</p>
     <form method="post" action="{{ url_for('resume_session', session_id=session_row.id) }}">
@@ -108,7 +141,9 @@
     logUrl: "{{ url_for('log_set', session_id=session_row.id) }}",
     notesUrl: "{{ url_for('session_notes', session_id=session_row.id) }}",
     deleteBase: "{{ url_for('session_log', session_id=session_row.id) }}/set/",
-    entryBase: "{{ url_for('session_log', session_id=session_row.id) }}/exercise/"
+    entryBase: "{{ url_for('session_log', session_id=session_row.id) }}/exercise/",
+    cardioUrl: "{{ url_for('log_cardio', session_id=session_row.id) }}",
+    cardioDeleteBase: "{{ url_for('session_log', session_id=session_row.id) }}/cardio/"
   };
   window.I18N = {
     kg: {{ t('entry.unit_kg') | tojson }},
@@ -117,7 +152,14 @@
     assist: {{ t('entry.assist') | tojson }},
     promptWeight: {{ t('entry.prompt_weight') | tojson }},
     promptReps: {{ t('entry.prompt_reps') | tojson }},
-    saveFailed: {{ t('entry.save_failed') | tojson }}
+    saveFailed: {{ t('entry.save_failed') | tojson }},
+    min: {{ t('cardio.min_unit') | tojson }},
+    km: {{ t('cardio.km_unit') | tojson }},
+    kmh: {{ t('cardio.kmh_unit') | tojson }},
+    pickCardioType: {{ t('cardio.pick_type') | tojson }},
+    cardioTypes: {
+      {% for ct in cardio_types %}{{ ct | tojson }}: {{ t('cardio.' + ct) | tojson }}{% if not loop.last %},{% endif %}{% endfor %}
+    }
   };
 </script>
 <script src="{{ static_url('session.js') }}" defer></script>

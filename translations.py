@@ -68,6 +68,25 @@ UI = {
     "session.save_notes":  ("Save notes", "メモを保存"),
     "session.saved":       ("Saved.", "保存しました。"),
 
+    # optional cardio, added below the exercise plan
+    "session.cardio":      ("Cardio", "有酸素運動"),
+    "session.cardio_hint": ("optional", "任意"),
+    "cardio.type":         ("Type", "種目"),
+    "cardio.type_ph":      ("Type…", "種目を選択…"),
+    "cardio.inside_run":   ("Inside Run", "室内ラン"),
+    "cardio.outside_run":  ("Outside Run", "屋外ラン"),
+    "cardio.elliptical":   ("Elliptical", "クロストレーナー"),
+    "cardio.cycling":      ("Cycling", "サイクリング"),
+    "cardio.duration":     ("Time (min)", "時間（分）"),
+    "cardio.distance":     ("Distance (km)", "距離（km）"),
+    "cardio.speed":        ("Speed (km/h)", "速度（km/h）"),
+    "cardio.min_unit":     ("min", "分"),
+    "cardio.km_unit":      ("km", "km"),
+    "cardio.kmh_unit":     ("km/h", "km/h"),
+    "cardio.add":          ("Add cardio", "有酸素を追加"),
+    "cardio.no_entries":   ("No cardio logged yet.", "まだ有酸素の記録はありません。"),
+    "cardio.pick_type":    ("Pick a cardio type first.", "先に種目を選んでください。"),
+
     # the set entry screen
     "entry.previous":      ("Previous", "前回"),
     "entry.pb":            ("PB", "自己ベスト"),

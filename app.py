@@ -109,7 +109,7 @@ def healthz():
 # not as files the Python sandbox can open -- so bump ASSET_VERSION by hand
 # whenever a static file changes; every filename shares that one version.
 
-ASSET_VERSION = "2"
+ASSET_VERSION = "3"
 _ASSET_HASHES = {}
 
 
@@ -416,6 +416,8 @@ def session_log(session_id):
         grouped=grouped,
         exercises_json=exercises,
         exercise_count=len(exercises),
+        cardio_entries=models.get_cardio_for_session(g.db, session_id),
+        cardio_types=models.CARDIO_TYPES,
         user_name=session.get("user_name"),
     )
 
@@ -603,6 +605,44 @@ def delete_set(session_id, set_id):
     return redirect(request.referrer or url_for("session_log", session_id=session_id))
 
 
+@app.route("/session/<int:session_id>/cardio", methods=["POST"])
+@login_required
+@user_required
+def log_cardio(session_id):
+    owned_session(session_id)
+    data = request.get_json(silent=True) or request.form
+
+    cardio_type = data.get("cardio_type")
+    if cardio_type not in models.CARDIO_TYPES:
+        return jsonify({"error": "unknown cardio type"}), 400
+
+    def to_float(key):
+        raw = data.get(key)
+        if raw in (None, "", "null"):
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
+    entry_id = models.log_cardio(
+        g.db, session_id, cardio_type,
+        to_float("duration_min"), to_float("distance_km"), to_float("speed_kmh"),
+    )
+    return jsonify({"ok": True, "id": entry_id})
+
+
+@app.route("/session/<int:session_id>/cardio/<int:cardio_id>/delete", methods=["POST"])
+@login_required
+@user_required
+def delete_cardio(session_id, cardio_id):
+    owned_session(session_id)
+    ok = models.delete_cardio(g.db, cardio_id, session_id)
+    if request.is_json:
+        return jsonify({"ok": ok})
+    return redirect(url_for("session_log", session_id=session_id))
+
+
 @app.route("/session/<int:session_id>/notes", methods=["POST"])
 @login_required
 @user_required
@@ -626,7 +666,8 @@ def history():
     exercise_id = request.args.get("exercise_id", type=int)
     sessions = models.get_sessions_for_user(g.db, session["user_id"], split_id, exercise_id)
     sessions_with_sets = [
-        {"session": s, "sets": models.get_sets_for_session(g.db, s["id"])}
+        {"session": s, "sets": models.get_sets_for_session(g.db, s["id"]),
+         "cardio": models.get_cardio_for_session(g.db, s["id"])}
         for s in sessions
     ]
     return render_template(
